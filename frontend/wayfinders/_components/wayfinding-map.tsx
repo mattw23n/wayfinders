@@ -76,8 +76,8 @@ function MapContent() {
   return (
     <>
       {/* First Search Control - START */}
-      <MapSearchControl 
-        className="top-1 left-1" 
+      <MapSearchControl
+        className="top-1 left-1 z-9999"
         placeholder="Search start location..."
         onPlaceSelect={handleStartSelect}
       />
