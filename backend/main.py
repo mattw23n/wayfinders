@@ -183,6 +183,7 @@ async def process_routes(routes: list) -> list:
     """Process and enrich routes with venue information"""
     processed = []
     today = datetime.now().strftime("%A")
+    current_time = datetime(2026, 1, 19, 11, 50)
 
     for route in routes:
         # Extract coordinates from route
@@ -197,10 +198,14 @@ async def process_routes(routes: list) -> list:
             nearby_venues,
             classes_by_venue,
         )
+        
+        # Get critical venues with their classes
+        critical_venues = get_critical_venues(nearby_venues, classes_by_venue, current_time)
 
         processed.append({
             "route": route,
             "nearby_venues": nearby_venues,
+            "critical_venues": critical_venues,
             "penalty_score": penalty_score
         })
 
@@ -208,6 +213,57 @@ async def process_routes(routes: list) -> list:
     processed.sort(key=lambda x: x["penalty_score"])
 
     return processed
+
+def get_critical_venues(nearby_venues: list, classes_by_venue: dict, current_time: datetime) -> list:
+    """
+    Get list of venues that have critical classes
+    
+    Args:
+        nearby_venues: List of venues near the route
+        classes_by_venue: Dictionary mapping venue_id to list of classes
+        current_time: Current datetime
+    
+    Returns:
+        List of critical venues with their critical classes
+    """
+    critical_venues = []
+    
+    for venue_data in nearby_venues:
+        venue = venue_data['venue']
+        venue_id = venue_data['_id']
+        
+        # Get classes for this venue
+        classes = classes_by_venue.get(venue_id, [])
+        
+        # Find critical classes
+        critical_classes = []
+        for class_entry in classes:
+            if is_class_critical_time(class_entry, current_time):
+                critical_classes.append({
+                    'class_id': str(class_entry.get('_id')),
+                    'startTime': class_entry.get('startTime'),
+                    'endTime': class_entry.get('endTime'),
+                    'size': class_entry.get('size', 0),
+                    'name': class_entry.get('name', 'Unknown Class')
+                })
+        
+        # Only add venue if it has critical classes
+        if critical_classes:
+            venue_coords = venue.get('location', {}).get('coordinates', [])
+            critical_venues.append({
+                '_id': str(venue_id),
+                'roomName': venue.get('roomName', 'Unknown'),
+                'location': {
+                    'type': 'Point',
+                    'coordinates': venue_coords
+                },
+                'latitude': venue_coords[1] if len(venue_coords) > 1 else None,
+                'longitude': venue_coords[0] if len(venue_coords) > 0 else None,
+                'distance': venue_data['distance'],
+                'criticalClasses': critical_classes
+            })
+    
+    return critical_venues
 
 
 async def check_venues_along_route(coordinates: list):
