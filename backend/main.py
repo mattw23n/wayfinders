@@ -107,7 +107,7 @@ async def get_routes(request: RouteRequest):
     routes = api_response.get("features", [])
     
     # Process routes (all your business logic here)
-    processed_routes = process_routes(routes)
+    processed_routes = await process_routes(routes)
     
     # Concurrently generate an explanation for each route using LangChain
     if processed_routes and explanation_chain:
@@ -137,7 +137,7 @@ async def call_ors_api(payload: dict) -> dict:
         except httpx.HTTPError as e:
             raise HTTPException(status_code=500, detail=f"Error calling ORS API: {str(e)}")
 
-def process_routes(routes: list) -> list:
+async def process_routes(routes: list) -> list:
     """Process and enrich routes with venue information"""
     processed = []
     
@@ -146,7 +146,7 @@ def process_routes(routes: list) -> list:
         coordinates = route.get("geometry", {}).get("coordinates", [])
         
         # Check each coordinate against venues
-        nearby_venues = check_venues_along_route(coordinates)
+        nearby_venues = await check_venues_along_route(coordinates)
         
         # Calculate penalties
         penalty_score = calculate_penalty(nearby_venues)
@@ -166,6 +166,7 @@ def process_routes(routes: list) -> list:
 async def check_venues_along_route(coordinates: list):
     """Check which venues are near the route coordinates using MongoDB geospatial queries"""
     seen_venue_ids = set()  # Track venues we've already found to avoid duplicates
+    nearby_venues = []
 
     for coord in coordinates:
         # coord is [longitude, latitude] format from OpenRouteService
@@ -180,7 +181,7 @@ async def check_venues_along_route(coordinates: list):
             max_distance_meters=50
         )
 
-        # Yield unique venues with calculated distance
+        # Add unique venues with calculated distance
         for venue in venues:
             venue_id = venue.get('_id')
 
@@ -197,11 +198,13 @@ async def check_venues_along_route(coordinates: list):
                 else:
                     distance = 0  # Fallback if location data is missing
 
-                yield {
+                nearby_venues.append({
                     'venue': venue,
                     '_id': venue_id,
                     'distance': distance
-                }
+                })
+    
+    return nearby_venues
 
 def calculate_penalty(venues: list) -> float:
     """Calculate penalty score based on venue classes"""
@@ -210,8 +213,7 @@ def calculate_penalty(venues: list) -> float:
     
     total_penalty = 0.0
     current_time = datetime.now()
-    # today = current_time.strftime("%A")
-    today = "Monday" 
+    today = current_time.strftime("%A")
     
     for venue_data in venues:
         distance = venue_data['distance']
