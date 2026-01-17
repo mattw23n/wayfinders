@@ -490,7 +490,7 @@ export function WayfindingMap({
         <div className="relative w-full h-screen">
             <Map center={center} zoom={zoom} className="w-full h-full">
                 <MapLayers defaultTileLayer="Light">
-                    <MapLayersControl className="top-1 right-1 left-auto bottom-auto" />
+                    <MapLayersControl className="top-auto right-auto left-1 bottom-20" />
 
                     <MapTileLayer
                         name="Streets"
