@@ -152,7 +152,7 @@ function MapContent() {
             />
 
             <MapLocateControl className="top-auto right-1 bottom-20 left-auto" />
-            <MapZoomControl className="top-auto right-1 bottom-1 left-auto" />
+            <MapZoomControl className="top-auto right-1 bottom-30 left-auto" />
 
             {/* Start Location Marker - GREEN */}
             {startLocation && (
@@ -251,7 +251,7 @@ function MapContent() {
                     </div>
 
                     {/* Panel Content */}
-                    <div className="overflow-y-auto" style={{ maxHeight: "calc(70vh - 60px)" }}>
+                    <div className="overflow-y-auto" style={{ maxHeight: "calc(45vh - 60px)" }}>
                         {/* Route Tabs */}
                         <div className="flex gap-2 p-4 border-b overflow-x-auto">
                             {routes.map((routeData, index) => {
