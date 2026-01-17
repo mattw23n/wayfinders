@@ -49,14 +49,8 @@ function MapContent() {
         console.log("Start selected - full feature:", feature);
 
         const location: Location = {
-            name:
-                feature.properties.name ||
-                feature.properties.display_name?.split(",")[0] ||
-                "Start Location",
-            address:
-                feature.properties.display_name ||
-                feature.properties.name ||
-                "",
+            name: feature.properties.name || "Start Location",
+            address: feature.properties.name || "",
             coordinates: feature.geometry.coordinates.toReversed() as [
                 number,
                 number,
@@ -72,14 +66,8 @@ function MapContent() {
         console.log("End selected - full feature:", feature);
 
         const location: Location = {
-            name:
-                feature.properties.name ||
-                feature.properties.display_name?.split(",")[0] ||
-                "End Location",
-            address:
-                feature.properties.display_name ||
-                feature.properties.name ||
-                "",
+            name: feature.properties.name || "End Location",
+            address: feature.properties.name || "",
             coordinates: feature.geometry.coordinates.toReversed() as [
                 number,
                 number,
