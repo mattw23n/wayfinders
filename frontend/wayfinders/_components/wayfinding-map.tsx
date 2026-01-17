@@ -155,7 +155,7 @@ function MapContent() {
 
         setLoading(true);
         try {
-            const response = await fetch("http://127.0.0.1:8000/routes/", {
+            const response = await fetch(`http://127.0.0.1:8000/routes/?current_datetime=${encodeURIComponent(simulationTime)}`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -168,8 +168,7 @@ function MapContent() {
                     end: {
                         longitude: endLocation.coordinates[1],
                         latitude: endLocation.coordinates[0],
-                    },
-                    current_datetime: simulationTime,
+                    }
                 }),
             });
 
