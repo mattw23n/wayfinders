@@ -42,5 +42,6 @@ uvicorn==0.40.0
 uvloop==0.22.1
 watchfiles==1.1.1
 websockets==16.0
-langchain
-langchain-google-genai
+langchain>=0.1.0
+langchain-google-genai>=1.0.0
+langchain-core>=0.1.0
