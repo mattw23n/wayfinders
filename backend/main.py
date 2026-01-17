@@ -16,29 +16,6 @@ mongo = MongoAPIClient()
 ORS_BASE_URL = os.getenv("ORS_BASE_URL")
 ORS_API_KEY = os.getenv("ORS_API_KEY")
 
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
-
-
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: Union[str, None] = None):
-    return {"item_id": item_id, "q": q}
-
-
-# TODO: Create endpoint to process routing requests
-
-# @app.post("/route/")
-# def create_route(request: RouteRequest):
-#     # Call OpenRouteService API to get route
-#     # Get list of waypoints from request
-#     # For each alternative route,
-#       # For each checkpoint, 
-#         # Check if the checkpoint is within 50ms of ANY of the venues, store distance
-#     # Return all venues along with distance for the entire route
-#     # Calculate penalty by checking if the venue has a class that is about to end or about to start (15 mins), penalty score = class size * (50/actual distance)
-#     # Sort routes based on penalty score, return the best route to the user
-
 @app.post("/routes/")
 async def get_routes(request: RouteRequest):
     if not ORS_API_KEY:
@@ -119,10 +96,47 @@ def process_routes(routes: list) -> list:
 
 
 def check_venues_along_route(coordinates: list) -> list:
-    """Check which venues are near the route coordinates"""
-    # Your venue checking logic here
-    return [ {"_id": "COM1-0212", "roomName": "Seminar Room 3", "floor": 2, "distance": 10} ]
-
+    """Check which venues are near the route coordinates using MongoDB geospatial queries"""
+    nearby_venues = []
+    seen_venue_ids = set()  # Track venues we've already found to avoid duplicates
+    
+    for coord in coordinates:
+        # coord is [longitude, latitude] format from OpenRouteService
+        longitude = coord[0]
+        latitude = coord[1]
+        
+        # Query MongoDB for venues within 50m of this coordinate
+        venues = mongo.find_venues_near(
+            collection_name='venues',
+            longitude=longitude,
+            latitude=latitude,
+            max_distance_meters=50
+        )
+        
+        # Add unique venues to results with calculated distance
+        for venue in venues:
+            venue_id = venue.get('_id')
+            
+            # Skip if we've already added this venue
+            if venue_id not in seen_venue_ids:
+                seen_venue_ids.add(venue_id)
+                
+                # Calculate actual distance between coordinate and venue
+                venue_coords = venue.get('location', {}).get('coordinates', [])
+                if venue_coords:
+                    venue_lon = venue_coords[0]
+                    venue_lat = venue_coords[1]
+                    distance = calculate_distance(latitude, longitude, venue_lat, venue_lon)
+                else:
+                    distance = 0  # Fallback if location data is missing
+                
+                nearby_venues.append({
+                    'venue': venue,
+                    '_id': venue_id,
+                    'distance': distance
+                })
+    
+    return nearby_venues
 
 def calculate_penalty(venues: list) -> float:
     """Calculate penalty score based on venue classes"""
@@ -213,6 +227,34 @@ def is_class_critical_time(class_entry: dict, current_time: datetime) -> bool:
         return True
     
     return False
+
+def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """
+    Calculate distance between two coordinates in meters using Haversine formula
+    
+    Args:
+        lat1: Latitude of first point
+        lon1: Longitude of first point
+        lat2: Latitude of second point
+        lon2: Longitude of second point
+    
+    Returns:
+        Distance in meters
+    """
+    from math import radians, sin, cos, sqrt, atan2
+    
+    R = 6371000  # Earth's radius in meters
+    
+    lat1_rad = radians(lat1)
+    lat2_rad = radians(lat2)
+    delta_lat = radians(lat2 - lat1)
+    delta_lon = radians(lon2 - lon1)
+    
+    a = sin(delta_lat/2)**2 + cos(lat1_rad) * cos(lat2_rad) * sin(delta_lon/2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1-a))
+    
+    distance = R * c
+    return round(distance, 2)
 
 # TODO: Create get endpoint to see all venues and their current statuses (ongoing class or no) to visualize with a map
 
