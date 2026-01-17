@@ -167,24 +167,6 @@ function MapContent() {
           </Button>
         </div>
       )}
-
-      {/* Debug Panel */}
-      <div className="leaflet-top leaflet-right" style={{ top: '200px', pointerEvents: 'none' }}>
-        <div className="bg-black/80 text-white p-3 rounded text-xs font-mono max-w-[200px]">
-          <div>Start: {startLocation ? '✓' : '✗'}</div>
-          {startLocation && (
-            <div className="text-green-400 truncate">
-              {startLocation.name}
-            </div>
-          )}
-          <div className="mt-2">End: {endLocation ? '✓' : '✗'}</div>
-          {endLocation && (
-            <div className="text-red-400 truncate">
-              {endLocation.name}
-            </div>
-          )}
-        </div>
-      </div>
     </>
   );
 }
