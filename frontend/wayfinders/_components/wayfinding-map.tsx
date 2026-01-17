@@ -37,6 +37,9 @@ interface RouteData {
     penalty_score: number;
 }
 
+// Singapore bounding box: [minLon, minLat, maxLon, maxLat]
+const SINGAPORE_BBOX: [number, number, number, number] = [103.6, 1.15, 104.1, 1.47];
+
 function MapContent() {
     const map = useMap();
     const [startLocation, setStartLocation] = useState<Location | null>(null);
@@ -122,6 +125,7 @@ function MapContent() {
                 className="top-1 left-1 z-9999"
                 placeholder="Search start location..."
                 onPlaceSelect={handleStartSelect}
+                bbox={SINGAPORE_BBOX}
             />
 
             {/* Second Search Control - END */}
@@ -129,6 +133,7 @@ function MapContent() {
                 className="top-12 left-1"
                 placeholder="Search destination..."
                 onPlaceSelect={handleEndSelect}
+                bbox={SINGAPORE_BBOX}
             />
 
             <MapLocateControl className="top-auto right-1 bottom-20 left-auto" />
@@ -180,7 +185,6 @@ function MapContent() {
                             positions={positions}
                             pathOptions={{
                                 color,
-
                                 weight: 5,
                                 opacity: 0.8,
                             }}
