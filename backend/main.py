@@ -1,9 +1,11 @@
 from typing import Union
 
 from fastapi import FastAPI
+from service.mongo import MongoAPIClient
 
 app = FastAPI()
 
+mongo = MongoAPIClient()
 
 @app.get("/")
 def read_root():
