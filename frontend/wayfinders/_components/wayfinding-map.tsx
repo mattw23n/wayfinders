@@ -22,6 +22,8 @@ import {
     Clock,
     Route as RouteIcon,
     AlertTriangle,
+    Settings,
+    X,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import type { LatLngExpression } from "leaflet";
@@ -68,6 +70,9 @@ const SINGAPORE_BBOX: [number, number, number, number] = [
 
 function MapContent() {
     const map = useMap();
+    const [simulationTime, setSimulationTime] = useState("2026-01-19T11:50:00");
+    const [isTimeModalOpen, setIsTimeModalOpen] = useState(false);
+    const [tempTime, setTempTime] = useState("");
     const [startLocation, setStartLocation] = useState<Location | null>(null);
     const [endLocation, setEndLocation] = useState<Location | null>(null);
     const [routes, setRoutes] = useState<RouteData[]>([]);
@@ -89,7 +94,7 @@ function MapContent() {
         const fetchCrowdedVenues = async () => {
             try {
                 const response = await fetch(
-                    "http://127.0.0.1:8000/venues/status",
+                    `http://127.0.0.1:8000/venues/status?current_datetime=${encodeURIComponent(simulationTime)}`,
                 );
                 if (response.ok) {
                     const data = await response.json();
@@ -105,7 +110,7 @@ function MapContent() {
         // Refresh every 5 minutes
         const interval = setInterval(fetchCrowdedVenues, 5 * 60 * 1000);
         return () => clearInterval(interval);
-    }, []);
+    }, [simulationTime]);
 
     const handleStartSelect = (feature: PlaceFeature) => {
         console.log("Start selected - full feature:", feature);
@@ -164,6 +169,7 @@ function MapContent() {
                         longitude: endLocation.coordinates[1],
                         latitude: endLocation.coordinates[0],
                     },
+                    current_datetime: simulationTime,
                 }),
             });
 
@@ -201,6 +207,75 @@ function MapContent() {
                 onPlaceSelect={handleEndSelect}
                 bbox={SINGAPORE_BBOX}
             />
+
+            {/* Time Settings Button */}
+            <div className="absolute top-4 right-4 z-2000 pointer-events-auto">
+                <Button
+                    variant="secondary"
+                    size="icon"
+                    className="shadow-md"
+                    onClick={() => {
+                        setTempTime(simulationTime);
+                        setIsTimeModalOpen(true);
+                    }}
+                >
+                    <Settings className="h-5 w-5" />
+                </Button>
+            </div>
+
+            {/* Time Settings Modal */}
+            {isTimeModalOpen && (
+                <div className="fixed inset-0 z-10000 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div
+                        className="bg-background p-6 rounded-lg shadow-xl w-full max-w-md border border-border"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-semibold">
+                                Select Time
+                            </h3>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setIsTimeModalOpen(false)}
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="flex flex-col gap-2">
+                                <input
+                                    type="datetime-local"
+                                    step="1"
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    value={tempTime}
+                                    onChange={(e) =>
+                                        setTempTime(e.target.value)
+                                    }
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-2">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setIsTimeModalOpen(false)}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={() => {
+                                        setSimulationTime(tempTime);
+                                        setIsTimeModalOpen(false);
+                                    }}
+                                >
+                                    Save
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <MapLocateControl className="top-auto right-1 bottom-20 left-auto" />
             <MapZoomControl className="top-auto right-1 bottom-30 left-auto" />
