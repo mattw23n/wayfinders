@@ -38,7 +38,9 @@ interface RouteData {
 }
 
 // Singapore bounding box: [minLon, minLat, maxLon, maxLat]
-const SINGAPORE_BBOX: [number, number, number, number] = [103.6, 1.15, 104.1, 1.47];
+const SINGAPORE_BBOX: [number, number, number, number] = [
+    103.6, 1.15, 104.1, 1.47,
+];
 
 function MapContent() {
     const map = useMap();
@@ -180,31 +182,23 @@ function MapContent() {
 
                     return (
                         <MapPolyline
-                            className="fill-none"
                             key={`route-${index}`}
                             positions={positions}
                             pathOptions={{
                                 color,
                                 weight: 5,
                                 opacity: 0.8,
+                                fillColor: color,
+                                fillOpacity: 0,
                             }}
+                            className=""
                         />
                     );
                 })}
 
             {/* Calculate Route Button */}
             {startLocation && endLocation && (
-                <div
-                    className="leaflet-control"
-                    style={{
-                        position: "absolute",
-                        top: "90px",
-                        left: "15%",
-                        transform: "translateX(-50%)",
-                        zIndex: 1000,
-                        pointerEvents: "auto",
-                    }}
-                >
+                <div className="leaflet-control absolute top-24 left-1 z-1000 pointer-events-auto">
                     <Button
                         className="shadow-2xl"
                         size="lg"
