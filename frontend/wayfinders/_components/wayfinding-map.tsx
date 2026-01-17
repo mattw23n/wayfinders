@@ -609,6 +609,7 @@ function MapContent() {
                                                 ? colorClass
                                                 : "border-border bg-muted"
                                         }`}
+                                        onClick={() => setSelectedRouteIndex(index)}
                                     >
                                         <div className="text-xs font-medium mb-1">
                                             Route {index + 1}
@@ -629,7 +630,7 @@ function MapContent() {
                                         <Button
                                             size="sm"
                                             variant="secondary"
-                                            className="mt-2 w-full"
+                                            className="mt-2 w-full cursor-pointer"
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 startNavigation(
