@@ -28,28 +28,33 @@ if ANTHROPIC_API_KEY:
         model="claude-haiku-4-5-20251001",
         anthropic_api_key=ANTHROPIC_API_KEY,
         temperature=0,
-        max_retries=2,  # Add retry logic
-        timeout=10.0,   # Add timeout to prevent hanging
+        max_retries=2,
+        timeout=15.0,
     )
 
-    # Create a prompt template
+    # Create a prompt template for ALL routes at once
     prompt_template = ChatPromptTemplate.from_template(
         """
-        You are explaining a single pedestrian route option to a user.
-        The user is choosing between {num_options} options.
-        The most important factor is the 'penalty_score', where lower is better because it means the route is less crowded.
+        You are helping a user choose between {num_options} pedestrian route options.
+        The 'penalty_score' indicates crowdedness (lower is better - less crowded).
 
-        This specific route has the following characteristics:
-        - Duration: {duration_minutes} minutes
-        - Distance: {distance_meters} meters
-        - Crowdedness Score (lower is better): {penalty_score}
+        Here are ALL the route options:
 
-        It is the recommended route: {is_recommended}.
+        {all_routes_info}
 
-        Please provide a very short, one-sentence explanation for this specific route.
-        - If it is the recommended route, start with "Best choice:" and explain why (e.g., "it's the least crowded path").
-        - If it is NOT the recommended route, explain its trade-off (e.g., "A bit faster, but goes through busier areas.").
-        - Be encouraging and friendly. Avoid technical jargon.
+        Please provide a very short, one-sentence explanation for EACH route in order.
+        Format your response EXACTLY as:
+        Route 1: [explanation]
+        Route 2: [explanation]
+        Route 3: [explanation]
+
+        Guidelines:
+        - Route 1 is ALWAYS the recommended route (lowest penalty score)
+        - For Route 1: Start with "Best choice:" and explain why (e.g., "Best choice: avoids 2 busy venues, only 1 min longer")
+        - For other routes: Explain the trade-off compared to Route 1 (e.g., "Faster but passes Main Gym with 80+ people")
+        - Mention specific venue names and crowd sizes when relevant
+        - Be encouraging and friendly
+        - ONE sentence per route maximum
         """
     )
 
@@ -78,38 +83,99 @@ async def startup_event():
     await mongo.ensure_geospatial_index('venues')
 
 
-async def get_explanation_for_route(route_data: dict, all_routes: list) -> str:
+def format_routes_for_llm(processed_routes: list) -> str:
+    """Format all routes into a single string for the LLM"""
+    route_descriptions = []
+    
+    for idx, route_data in enumerate(processed_routes, 1):
+        route_summary = route_data.get("route", {}).get("properties", {}).get("summary", {})
+        duration_min = round(route_summary.get("duration", 0) / 60, 1)
+        distance_m = round(route_summary.get("distance", 0))
+        penalty = round(route_data.get("penalty_score", 0))
+        critical_venues = route_data.get("critical_venues", [])
+        
+        # Format critical venues info
+        venues_info = ""
+        if critical_venues:
+            venue_details = []
+            for venue in critical_venues[:3]:  # Limit to top 3 for brevity
+                venue_name = venue.get('roomName', 'Unknown')
+                total_people = sum(cls.get('size', 0) for cls in venue.get('criticalClasses', []))
+                venue_details.append(f"{venue_name} ({total_people} people)")
+            venues_info = f"\n  Busy venues: {', '.join(venue_details)}"
+        
+        route_desc = f"""Route {idx}:
+  - Duration: {duration_min} minutes
+  - Distance: {distance_m} meters
+  - Crowdedness Score: {penalty}
+  - Busy venues on route: {len(critical_venues)}{venues_info}"""
+        
+        route_descriptions.append(route_desc)
+    
+    return "\n\n".join(route_descriptions)
+
+
+def parse_llm_explanations(llm_response: str, num_routes: int) -> list:
+    """Parse LLM response into individual route explanations"""
+    explanations = []
+    lines = llm_response.strip().split('\n')
+    
+    for i in range(1, num_routes + 1):
+        # Look for "Route X:" pattern
+        route_pattern = f"Route {i}:"
+        explanation = None
+        
+        for line in lines:
+            if line.strip().startswith(route_pattern):
+                # Extract everything after "Route X:"
+                explanation = line.split(route_pattern, 1)[1].strip()
+                break
+        
+        # Fallback if parsing fails
+        if not explanation:
+            if i == 1:
+                explanation = "Recommended route with lowest crowdedness."
+            else:
+                explanation = "Alternative route option."
+        
+        explanations.append(explanation)
+    
+    return explanations
+
+
+async def get_explanations_for_all_routes(processed_routes: list) -> list:
     """
-    Uses a LangChain chain to create a human-readable explanation for a single route.
+    Uses a single LLM call to generate explanations for all routes
     """
-    if not explanation_chain:
-        return "LLM explanation not available: ANTHROPIC_API_KEY not configured."
+    if not explanation_chain or not processed_routes:
+        return ["Explanation not available."] * len(processed_routes)
 
     try:
-        # Simplify the data for the prompt
-        current_route_summary = route_data.get("route", {}).get("properties", {}).get("summary", {})
-
+        # Format all routes for the LLM
+        all_routes_info = format_routes_for_llm(processed_routes)
+        
         prompt_input = {
-            "num_options": len(all_routes),
-            "duration_minutes": round(current_route_summary.get("duration", 0) / 60, 1),
-            "distance_meters": round(current_route_summary.get("distance", 0)),
-            "penalty_score": round(route_data.get("penalty_score", 0)),
-            "is_recommended": "Yes" if route_data == all_routes[0] else "No"
+            "num_options": len(processed_routes),
+            "all_routes_info": all_routes_info
         }
 
-        # Wrap in asyncio.create_task to ensure true parallelism
+        # Single LLM call for all routes
         response = await asyncio.wait_for(
             explanation_chain.ainvoke(prompt_input),
-            timeout=15.0  # 15 second timeout per route
+            timeout=20.0
         )
-        return response.strip()
+        
+        # Parse the response into individual explanations
+        explanations = parse_llm_explanations(response, len(processed_routes))
+        
+        return explanations
 
     except asyncio.TimeoutError:
-        print(f"Timeout generating explanation for route")
-        return "Route explanation timed out."
+        print(f"Timeout generating explanations for routes")
+        return ["Route explanation timed out."] * len(processed_routes)
     except Exception as e:
-        print(f"Error calling LangChain chain for a route: {e}")
-        return "Could not generate an explanation for this route due to an error."
+        print(f"Error calling LangChain chain: {e}")
+        return ["Could not generate explanation due to an error."] * len(processed_routes)
 
 
 @app.post("/routes/")
@@ -145,26 +211,14 @@ async def get_routes(request: RouteRequest, current_datetime: Optional[str] = Qu
     processed_routes = await process_routes(routes, current_time)
     print(f"Route processing took: {(datetime.now() - start_time).total_seconds():.2f}s")
     
-    # Time the LLM explanation generation
+    # Time the LLM explanation generation (SINGLE CALL)
     start_time = datetime.now()
-    # Concurrently generate explanations for all routes using LangChain
     if processed_routes and explanation_chain:
-        # Create all tasks upfront
-        explanation_tasks = [
-            get_explanation_for_route(route, processed_routes) 
-            for route in processed_routes
-        ]
+        explanations = await get_explanations_for_all_routes(processed_routes)
         
-        # Run all explanations in parallel with gather
-        explanations = await asyncio.gather(*explanation_tasks, return_exceptions=True)
-        
-        # Handle results
+        # Attach explanations to routes
         for route, explanation in zip(processed_routes, explanations):
-            if isinstance(explanation, Exception):
-                route["explanation"] = "Explanation generation failed."
-                print(f"Exception generating explanation: {explanation}")
-            else:
-                route["explanation"] = explanation
+            route["explanation"] = explanation
     else:
         for route in processed_routes:
             route["explanation"] = "Explanation not available."
@@ -434,7 +488,6 @@ def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     distance = R * c
     return round(distance, 2)
 
-# TODO: Create get endpoint to see all venues and their current statuses (ongoing class or no) to visualize with a map
 @app.get("/venues/status")
 async def get_venues_status(current_datetime: Optional[str] = Query(None, description="Current date and time in ISO format")):
     """
