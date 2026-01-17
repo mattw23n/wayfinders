@@ -3,7 +3,7 @@ import httpx
 import os
 import dotenv
 import asyncio
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
@@ -18,13 +18,17 @@ from service.mongo import MongoAPIClient
 from datetime import datetime, timedelta
 
 # --- LangChain Setup ---
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 llm = None
 explanation_chain = None
 
-if GEMINI_API_KEY:
-    # Initialize the LangChain model
-    llm = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=GEMINI_API_KEY, temperature=0)
+if ANTHROPIC_API_KEY:
+    # Initialize the LangChain model with Claude
+    llm = ChatAnthropic(
+        model="claude-3-5-sonnet-20241022",
+        anthropic_api_key=ANTHROPIC_API_KEY,
+        temperature=0
+    )
 
     # Create a prompt template
     prompt_template = ChatPromptTemplate.from_template(
@@ -72,7 +76,7 @@ async def get_explanation_for_route(route_data: dict, all_routes: list) -> str:
     Uses a LangChain chain to create a human-readable explanation for a single route.
     """
     if not explanation_chain:
-        return "LLM explanation not available: GEMINI_API_KEY not configured."
+        return "LLM explanation not available: ANTHROPIC_API_KEY not configured."
 
     try:
         # Simplify the data for the prompt
