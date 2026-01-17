@@ -59,6 +59,21 @@ async def get_routes(request: RouteRequest):
     }
     
     # Call OpenRouteService API
+    api_response = await call_ors_api(payload)
+    
+    # Extract routes from response
+    routes = api_response.get("features", [])
+    
+    # Process routes (all your business logic here)
+    processed_routes = process_routes(routes)
+    
+    return {
+        "routes": processed_routes,
+        "raw_response": api_response
+    }
+    
+async def call_ors_api(payload: dict) -> dict:
+    """Call OpenRouteService API and return response"""
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
@@ -70,16 +85,47 @@ async def get_routes(request: RouteRequest):
                 },
                 timeout=30.0
             )
-            # Store API output in variable
-            api_response = response.json()
-            
-            # Extract routes from response
-            routes = api_response.get("features", [])
-            
-            return api_response
+            response.raise_for_status()
+            return response.json()
         except httpx.HTTPError as e:
             raise HTTPException(status_code=500, detail=f"Error calling ORS API: {str(e)}")
+
+def process_routes(routes: list) -> list:
+    """Process and enrich routes with venue information"""
+    processed = []
     
+    for route in routes:
+        # Extract coordinates from route
+        coordinates = route.get("geometry", {}).get("coordinates", [])
+        
+        # Check each coordinate against venues
+        nearby_venues = check_venues_along_route(coordinates)
+        
+        # Calculate penalties
+        penalty_score = calculate_penalty(nearby_venues)
+        
+        processed.append({
+            "route": route,
+            "nearby_venues": nearby_venues,
+            "penalty_score": penalty_score
+        })
+    
+    # Sort by penalty score (lower is better)
+    processed.sort(key=lambda x: x["penalty_score"])
+    
+    return processed
+
+
+def check_venues_along_route(coordinates: list) -> list:
+    """Check which venues are near the route coordinates"""
+    # Your venue checking logic here
+    return []
+
+
+def calculate_penalty(venues: list) -> float:
+    """Calculate penalty score based on venue classes"""
+    # Your penalty calculation logic here
+    return 0.0
 
 # TODO: Create get endpoint to see all venues and their current statuses (ongoing class or no) to visualize with a map
 
