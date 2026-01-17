@@ -8,14 +8,14 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
 
+
 dotenv.load_dotenv()
 
 from models import RouteRequest
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from service.mongo import MongoAPIClient
-
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # --- LangChain Setup ---
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
@@ -52,7 +52,7 @@ if ANTHROPIC_API_KEY:
         - Be encouraging and friendly. Avoid technical jargon.
         """
     )
-    
+
     # Create a chain by piping the prompt to the model
     explanation_chain = prompt_template | llm | StrOutputParser()
 
@@ -83,7 +83,7 @@ async def get_explanation_for_route(route_data: dict, all_routes: list) -> str:
     try:
         # Simplify the data for the prompt
         current_route_summary = route_data.get("route", {}).get("properties", {}).get("summary", {})
-        
+
         prompt_input = {
             "num_options": len(all_routes),
             "duration_minutes": round(current_route_summary.get("duration", 0) / 60, 1),
@@ -111,8 +111,12 @@ async def get_explanation_for_route(route_data: dict, all_routes: list) -> str:
 async def get_routes(request: RouteRequest):
     if not ORS_API_KEY:
         raise HTTPException(status_code=500, detail="ORS API key not configured")
-    
-    coordinates = [[request.start.longitude, request.start.latitude], [request.end.longitude, request.end.latitude]]
+
+    # Prepare coordinates for ORS API
+    coordinates = [
+        [request.start.longitude, request.start.latitude],
+        [request.end.longitude, request.end.latitude]
+    ]
     payload = {"coordinates": coordinates, "alternative_routes": {"target_count": 3, "weight_factor": 1.5, "share_factor": 0.6}}
     
     # Time the ORS API call
@@ -154,7 +158,7 @@ async def get_routes(request: RouteRequest):
     print(f"LLM explanation generation took: {(datetime.now() - start_time).total_seconds():.2f}s")
 
     return {"routes": processed_routes, "raw_ors_response": api_response}
-    
+
 async def call_ors_api(payload: dict) -> dict:
     """Call OpenRouteService API and return response"""
     async with httpx.AsyncClient() as client:
@@ -173,26 +177,31 @@ async def call_ors_api(payload: dict) -> dict:
 async def process_routes(routes: list) -> list:
     """Process and enrich routes with venue information"""
     processed = []
-    
+    today = datetime.now().strftime("%A")
+
     for route in routes:
         # Extract coordinates from route
         coordinates = route.get("geometry", {}).get("coordinates", [])
-        
+
         # Check each coordinate against venues
         nearby_venues = await check_venues_along_route(coordinates)
-        
+
         # Calculate penalties
-        penalty_score = calculate_penalty(nearby_venues)
-        
+        classes_by_venue = await load_classes_by_venue(nearby_venues, today)
+        penalty_score = calculate_penalty(
+            nearby_venues,
+            classes_by_venue,
+        )
+
         processed.append({
             "route": route,
             "nearby_venues": nearby_venues,
             "penalty_score": penalty_score
         })
-    
+
     # Sort by penalty score (lower is better)
     processed.sort(key=lambda x: x["penalty_score"])
-    
+
     return processed
 
 
@@ -207,11 +216,11 @@ async def check_venues_along_route(coordinates: list):
         latitude = coord[1]
 
         # Query MongoDB for venues within 50m of this coordinate
-        venues = mongo.find_venues_near(
-            collection_name='venues',
-            longitude=longitude,
-            latitude=latitude,
-            max_distance_meters=50
+        venues = await mongo.find_venues_near(
+            'venues',
+            longitude,
+            latitude,
+            50,
         )
 
         # Add unique venues with calculated distance
@@ -236,10 +245,10 @@ async def check_venues_along_route(coordinates: list):
                     '_id': venue_id,
                     'distance': distance
                 })
-    
+
     return nearby_venues
 
-def calculate_penalty(venues: list) -> float:
+def calculate_penalty(venues: list, classes_by_venue: dict) -> float:
     """Calculate penalty score based on venue classes"""
     if not venues:
         return 0.0
@@ -253,7 +262,7 @@ def calculate_penalty(venues: list) -> float:
         venue_id = venue_data['_id']
         
         # Query MongoDB for today's class schedule at this venue
-        classes = mongo.get_venue_classes_for_day(venue_id, today)
+        classes = classes_by_venue.get(venue_id, [])
         
         # print(f"Classes for venue {venue_id} on {today}: {classes}")
         
@@ -272,6 +281,28 @@ def calculate_penalty(venues: list) -> float:
                 total_penalty += penalty
     
     return total_penalty
+
+
+async def load_classes_by_venue(venues: list, today: str) -> dict:
+    """Load classes for all venue IDs in one query and group by venueId."""
+    if not venues:
+        return {}
+
+    venue_ids = list({venue["_id"] for venue in venues})
+
+    classes = await mongo.get_venues_classes_for_day(
+        venue_ids,
+        today,
+    )
+
+    classes_by_venue = {}
+    for class_entry in classes:
+        venue_id = class_entry.get("venueId")
+        if venue_id is None:
+            continue
+        classes_by_venue.setdefault(venue_id, []).append(class_entry)
+
+    return classes_by_venue
 
 def is_class_critical_time(class_entry: dict, current_time: datetime) -> bool:
     """
@@ -461,7 +492,8 @@ async def get_venues_status():
             }
         ]
         
-        critical_venues = list(mongo.get_collection('venues').aggregate(pipeline))
+        cursor = mongo.get_collection('venues').aggregate(pipeline)
+        critical_venues = await cursor.to_list(length=None)
         
         return {
             'total_critical_venues': len(critical_venues),
