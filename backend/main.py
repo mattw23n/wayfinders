@@ -72,6 +72,11 @@ mongo = MongoAPIClient()
 ORS_BASE_URL = os.getenv("ORS_BASE_URL")
 ORS_API_KEY = os.getenv("ORS_API_KEY")
 
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database indices on startup"""
+    await mongo.ensure_geospatial_index('venues')
+
 
 async def get_explanation_for_route(route_data: dict, all_routes: list) -> str:
     """
@@ -206,45 +211,25 @@ async def process_routes(routes: list) -> list:
 
 
 async def check_venues_along_route(coordinates: list):
-    """Check which venues are near the route coordinates using MongoDB geospatial queries"""
-    seen_venue_ids = set()  # Track venues we've already found to avoid duplicates
+    """Check which venues are near the route coordinates using optimized MongoDB aggregation"""
+    if not coordinates:
+        return []
+
+    # Use aggregation to find all venues near any coordinate in a single query
+    venues = await mongo.find_venues_near_coordinates(
+        'venues',
+        coordinates,
+        50,
+    )
+
+    # Build venue list with full data
     nearby_venues = []
-
-    for coord in coordinates:
-        # coord is [longitude, latitude] format from OpenRouteService
-        longitude = coord[0]
-        latitude = coord[1]
-
-        # Query MongoDB for venues within 50m of this coordinate
-        venues = await mongo.find_venues_near(
-            'venues',
-            longitude,
-            latitude,
-            50,
-        )
-
-        # Add unique venues with calculated distance
-        for venue in venues:
-            venue_id = venue.get('_id')
-
-            # Skip if we've already added this venue
-            if venue_id not in seen_venue_ids:
-                seen_venue_ids.add(venue_id)
-
-                # Calculate actual distance between coordinate and venue
-                venue_coords = venue.get('location', {}).get('coordinates', [])
-                if venue_coords:
-                    venue_lon = venue_coords[0]
-                    venue_lat = venue_coords[1]
-                    distance = calculate_distance(latitude, longitude, venue_lat, venue_lon)
-                else:
-                    distance = 0  # Fallback if location data is missing
-
-                nearby_venues.append({
-                    'venue': venue,
-                    '_id': venue_id,
-                    'distance': distance
-                })
+    for venue in venues:
+        nearby_venues.append({
+            'venue': venue,
+            '_id': venue.get('_id'),
+            'distance': venue.get('distance', 0)
+        })
 
     return nearby_venues
 
