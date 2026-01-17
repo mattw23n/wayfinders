@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
     Map,
     MapMarker,
@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Navigation, MapPin, ChevronUp, ChevronDown, Clock, Route as RouteIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import type { LatLngExpression } from "leaflet";
+import L from "leaflet";
 import type { PlaceFeature } from "@/components/ui/place-autocomplete";
 import { useMap } from "react-leaflet";
 
@@ -50,6 +51,14 @@ function MapContent() {
     const [loading, setLoading] = useState(false);
     const [isPanelOpen, setIsPanelOpen] = useState(false);
     const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
+    const panelRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (panelRef.current) {
+            L.DomEvent.disableScrollPropagation(panelRef.current);
+            L.DomEvent.disableClickPropagation(panelRef.current);
+        }
+    }, [routes]);
 
     const handleStartSelect = (feature: PlaceFeature) => {
         console.log("Start selected - full feature:", feature);
@@ -216,7 +225,8 @@ function MapContent() {
             {/* Swipe-up Panel for Route Instructions */}
             {routes.length > 0 && (
                 <div
-                    className="fixed left-0 right-0 bg-background border-t border-border shadow-2xl transition-transform duration-300 ease-in-out z-[2000] pointer-events-auto bottom-0"
+                    ref={panelRef}
+                    className="fixed left-0 right-0 bg-background border-t border-border shadow-2xl transition-transform duration-300 ease-in-out z-2000 pointer-events-auto bottom-0"
                     style={{
                         maxHeight: "70vh",
                         transform: isPanelOpen ? "translateY(0)" : "translateY(calc(100% - 60px))"
@@ -255,7 +265,7 @@ function MapContent() {
                                     <button
                                         key={index}
                                         onClick={() => setSelectedRouteIndex(index)}
-                                        className={`flex-shrink-0 px-4 py-3 rounded-lg border-2 transition-all ${
+                                        className={`shrink-0 px-4 py-3 rounded-lg border-2 transition-all ${
                                             selectedRouteIndex === index
                                                 ? colorClass
                                                 : "border-border bg-muted"
