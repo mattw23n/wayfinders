@@ -129,4 +129,3 @@ def calculate_penalty(venues: list) -> float:
 
 # TODO: Create get endpoint to see all venues and their current statuses (ongoing class or no) to visualize with a map
 
-
