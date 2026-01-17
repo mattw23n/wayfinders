@@ -371,8 +371,11 @@ function MapContent() {
                         ],
                     );
 
-                    const colors = ["#22c55e", "#3b82f6", "#f59e0b"];
+                    const colors = ["#00c951", "#2b7fff", "#ad46ff"];
                     const color = colors[index] || "#6b7280";
+
+                     const weight = selectedRouteIndex === index ? 6 : 3;
+                    const opacity = selectedRouteIndex === index ? 1 : 0.6;
 
                     return (
                         <MapPolyline
@@ -380,10 +383,10 @@ function MapContent() {
                             positions={positions}
                             pathOptions={{
                                 color,
-                                weight: 5,
-                                opacity: 0.8,
+                                weight,
+                                opacity,
                             }}
-                            className="fill-none"
+                            className=""
                         />
                     );
                 })}
@@ -449,7 +452,7 @@ function MapContent() {
                                 const colors = [
                                     "border-green-500 bg-green-50 dark:bg-green-950",
                                     "border-blue-500 bg-blue-50 dark:bg-blue-950",
-                                    "border-orange-500 bg-orange-50 dark:bg-orange-950",
+                                    "border-purple-500 bg-purple-50 dark:bg-purple-950",
                                 ];
                                 const colorClass =
                                     colors[index] ||
