@@ -603,11 +603,8 @@ function MapContent() {
                                     "border-gray-500 bg-gray-50 dark:bg-gray-950";
 
                                 return (
-                                    <button
+                                  <div
                                         key={index}
-                                        onClick={() =>
-                                            setSelectedRouteIndex(index)
-                                        }
                                         className={`shrink-0 px-4 py-3 rounded-lg border-2 transition-all ${
                                             selectedRouteIndex === index
                                                 ? colorClass
@@ -645,7 +642,7 @@ function MapContent() {
                                             <Volume2 className="h-3 w-3 mr-1" />
                                             Start Navigation
                                         </Button>
-                                    </button>
+                                  </div>
                                 );
                             })}
                         </div>
