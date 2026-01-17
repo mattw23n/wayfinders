@@ -12,6 +12,7 @@ import {
     MapLocateControl,
     MapPolyline,
     MapTooltip,
+    MapMarkerClusterGroup
 } from "@/components/ui/map";
 import { Button } from "@/components/ui/button";
 import {
@@ -302,60 +303,91 @@ function MapContent() {
             )}
 
             {/* Crowded Venues Heatmap */}
-            {crowdedVenues.map((venue) => {
-                const totalClassSize = venue.criticalClasses.reduce(
-                    (sum, cls) => sum + cls.size,
-                    0,
-                );
-                // Determine marker size and color based on crowd level
-                const crowdLevel =
-                    totalClassSize < 50
-                        ? "low"
-                        : totalClassSize < 150
-                          ? "medium"
-                          : "high";
-                const sizeClass =
-                    crowdLevel === "low"
-                        ? "size-6"
-                        : crowdLevel === "medium"
-                          ? "size-8"
-                          : "size-10";
-                const colorClass =
-                    crowdLevel === "low"
-                        ? "text-yellow-500 fill-yellow-500"
-                        : crowdLevel === "medium"
-                          ? "text-orange-500 fill-orange-500"
-                          : "text-red-600 fill-red-600";
+            <MapMarkerClusterGroup
+                maxClusterRadius={30} // Combine markers within 30 pixels
+                spiderfyOnMaxZoom={true}
+                showCoverageOnHover={false}
+                zoomToBoundsOnClick={true}
+                icon={(markerCount) => {
+                    // Aggregate total class size for the cluster
+                    const clusterSize = markerCount;
+                    
+                    // Determine cluster styling based on size
+                    const sizeClass = 
+                        clusterSize < 3 ? "size-8" :
+                        clusterSize < 10 ? "size-10" :
+                        "size-12";
+                    
+                    const colorClass =
+                        clusterSize < 3 ? "bg-yellow-500 text-white" :
+                        clusterSize < 10 ? "bg-orange-500 text-white" :
+                        "bg-red-600 text-white";
 
-                return (
-                    <MapMarker
-                        key={`venue-${venue._id}`}
-                        position={[venue.latitude, venue.longitude]}
-                        icon={
-                            <AlertTriangle
-                                className={`${sizeClass} ${colorClass} opacity-70`}
-                            />
-                        }
-                    >
-                        <MapTooltip side="top">
-                            <div className="text-xs">
-                                <div className="font-semibold">
-                                    {venue.roomName}
+                    return (
+                        <div
+                            className={`${sizeClass} ${colorClass} rounded-full flex items-center justify-center font-bold shadow-lg border-2 border-white`}
+                        >
+                            {markerCount}
+                        </div>
+                    );
+                }}
+            >
+                {crowdedVenues.map((venue) => {
+                    const totalClassSize = venue.criticalClasses.reduce(
+                        (sum, cls) => sum + cls.size,
+                        0,
+                    );
+                    
+                    // Determine marker size and color based on crowd level
+                    const crowdLevel =
+                        totalClassSize < 50
+                            ? "low"
+                            : totalClassSize < 150
+                            ? "medium"
+                            : "high";
+                    const sizeClass =
+                        crowdLevel === "low"
+                            ? "size-6"
+                            : crowdLevel === "medium"
+                            ? "size-8"
+                            : "size-10";
+                    const bgColor =
+                        crowdLevel === "low"
+                            ? "bg-yellow-500"
+                            : crowdLevel === "medium"
+                            ? "bg-orange-500"
+                            : "bg-red-600";
+
+                    return (
+                        <MapMarker
+                            key={`venue-${venue._id}`}
+                            position={[venue.latitude, venue.longitude]}
+                            icon={
+                                <div
+                                    className={`${sizeClass} ${bgColor} rounded-full shadow-md border-2 border-white opacity-70`}
+                                />
+                            }
+                        >
+                            <MapTooltip side="top">
+                                <div className="text-xs">
+                                    <div className="font-semibold">
+                                        {venue.roomName}
+                                    </div>
+                                    <div className="text-muted-foreground mt-1">
+                                        {venue.criticalClasses.length} active{" "}
+                                        {venue.criticalClasses.length === 1
+                                            ? "class"
+                                            : "classes"}
+                                    </div>
+                                    <div className="text-muted-foreground">
+                                        ~{totalClassSize} people
+                                    </div>
                                 </div>
-                                <div className="text-muted-foreground mt-1">
-                                    {venue.criticalClasses.length} active{" "}
-                                    {venue.criticalClasses.length === 1
-                                        ? "class"
-                                        : "classes"}
-                                </div>
-                                <div className="text-muted-foreground">
-                                    ~{totalClassSize} people
-                                </div>
-                            </div>
-                        </MapTooltip>
-                    </MapMarker>
-                );
-            })}
+                            </MapTooltip>
+                        </MapMarker>
+                    );
+                })}
+            </MapMarkerClusterGroup>
 
             {/* Route Lines from API */}
             {routes.length > 0 &&
