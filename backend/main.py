@@ -2,8 +2,11 @@ from typing import Union
 import httpx
 import os
 import dotenv
-import google.generativeai as genai
 import asyncio
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
 
 dotenv.load_dotenv()
 
@@ -14,6 +17,40 @@ from service.mongo import MongoAPIClient
 
 from datetime import datetime, timedelta
 
+# --- LangChain Setup ---
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+llm = None
+explanation_chain = None
+
+if GEMINI_API_KEY:
+    # Initialize the LangChain model
+    llm = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=GEMINI_API_KEY, temperature=0)
+
+    # Create a prompt template
+    prompt_template = ChatPromptTemplate.from_template(
+        """
+        You are explaining a single pedestrian route option to a user.
+        The user is choosing between {num_options} options.
+        The most important factor is the 'penalty_score', where lower is better because it means the route is less crowded.
+
+        This specific route has the following characteristics:
+        - Duration: {duration_minutes} minutes
+        - Distance: {distance_meters} meters
+        - Crowdedness Score (lower is better): {penalty_score}
+
+        It is the recommended route: {is_recommended}.
+
+        Please provide a very short, one-sentence explanation for this specific route.
+        - If it is the recommended route, start with "Best choice:" and explain why (e.g., "it's the least crowded path").
+        - If it is NOT the recommended route, explain its trade-off (e.g., "A bit faster, but goes through busier areas.").
+        - Be encouraging and friendly. Avoid technical jargon.
+        """
+    )
+    
+    # Create a chain by piping the prompt to the model
+    explanation_chain = prompt_template | llm | StrOutputParser()
+
+# --- FastAPI App ---
 app = FastAPI()
 
 # Configure CORS
@@ -28,54 +65,33 @@ app.add_middleware(
 mongo = MongoAPIClient()
 ORS_BASE_URL = os.getenv("ORS_BASE_URL")
 ORS_API_KEY = os.getenv("ORS_API_KEY")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
 
 async def get_explanation_for_route(route_data: dict, all_routes: list) -> str:
     """
-    Uses a Generative LLM to create a human-readable explanation for a single route,
-    providing context about how it compares to the other options.
+    Uses a LangChain chain to create a human-readable explanation for a single route.
     """
-    if not GEMINI_API_KEY:
+    if not explanation_chain:
         return "LLM explanation not available: GEMINI_API_KEY not configured."
 
     try:
-        model = genai.GenerativeModel('gemini-pro')
-
-        # Simplify the data for the prompt to reduce token count
+        # Simplify the data for the prompt
         current_route_summary = route_data.get("route", {}).get("properties", {}).get("summary", {})
-        current_route_simplified = {
+        
+        prompt_input = {
+            "num_options": len(all_routes),
             "duration_minutes": round(current_route_summary.get("duration", 0) / 60, 1),
             "distance_meters": round(current_route_summary.get("distance", 0)),
             "penalty_score": round(route_data.get("penalty_score", 0)),
-            "is_recommended": route_data == all_routes[0]  # Check if it's the top-ranked route
+            "is_recommended": "Yes" if route_data == all_routes[0] else "No"
         }
 
-        prompt = f"""
-        You are explaining a single pedestrian route option to a user.
-        The user is choosing between {len(all_routes)} options.
-        The most important factor is the 'penalty_score', where lower is better because it means the route is less crowded.
-
-        This specific route has the following characteristics:
-        - Duration: {current_route_simplified['duration_minutes']} minutes
-        - Distance: {current_route_simplified['distance_meters']} meters
-        - Crowdedness Score (lower is better): {current_route_simplified['penalty_score']}
-
-        It is the recommended route: {'Yes' if current_route_simplified['is_recommended'] else 'No'}.
-
-        Please provide a very short, one-sentence explanation for this specific route.
-        - If it is the recommended route, start with "Best choice:" and explain why (e.g., "it's the least crowded path").
-        - If it is NOT the recommended route, explain its trade-off (e.g., "A bit faster, but goes through busier areas.").
-        - Be encouraging and friendly. Avoid technical jargon.
-        """
-
-        response = await model.generate_content_async(prompt)
-        return response.text.strip()
+        # Asynchronously invoke the chain
+        response = await explanation_chain.ainvoke(prompt_input)
+        return response.strip()
 
     except Exception as e:
-        print(f"Error calling Gemini API for a route: {e}")
+        print(f"Error calling LangChain chain for a route: {e}")
         return "Could not generate an explanation for this route due to an error."
 
 
@@ -84,36 +100,28 @@ async def get_routes(request: RouteRequest):
     if not ORS_API_KEY:
         raise HTTPException(status_code=500, detail="ORS API key not configured")
     
-    # Prepare coordinates for ORS API
-    coordinates = [
-        [request.start.longitude, request.start.latitude],
-        [request.end.longitude, request.end.latitude]
-    ]
+    coordinates = [[request.start.longitude, request.start.latitude], [request.end.longitude, request.end.latitude]]
+    payload = {"coordinates": coordinates, "alternative_routes": {"target_count": 3, "weight_factor": 1.5, "share_factor": 0.6}}
     
-    # Prepare request payload
-    payload = {
-        "coordinates": coordinates,
-        "alternative_routes": {
-            "target_count": 3,
-            "weight_factor": 1.5,
-            "share_factor": 0.6
-        }
-    }
-    
-    # Call OpenRouteService API
     api_response = await call_ors_api(payload)
-    
-    # Extract routes from response
     routes = api_response.get("features", [])
     
     # Process routes (all your business logic here)
     processed_routes = await process_routes(routes)
+    
+    # Concurrently generate an explanation for each route using LangChain
+    if processed_routes and explanation_chain:
+        explanation_tasks = [get_explanation_for_route(route, processed_routes) for route in processed_routes]
+        explanations = await asyncio.gather(*explanation_tasks)
+        
+        for route, explanation in zip(processed_routes, explanations):
+            route["explanation"] = explanation
+    else:
+        for route in processed_routes:
+            route["explanation"] = "Explanation not available."
 
-    return {
-        "routes": processed_routes,
-        "raw_ors_response": api_response
-    }
-
+    return {"routes": processed_routes, "raw_ors_response": api_response}
+    
 async def call_ors_api(payload: dict) -> dict:
     """Call OpenRouteService API and return response"""
     async with httpx.AsyncClient() as client:
@@ -121,10 +129,7 @@ async def call_ors_api(payload: dict) -> dict:
             response = await client.post(
                 f"{ORS_BASE_URL}/v2/directions/foot-walking/geojson",
                 json=payload,
-                headers={
-                    "Content-Type": "application/json; charset=utf-8",
-                    "Authorization": ORS_API_KEY
-                },
+                headers={"Content-Type": "application/json; charset=utf-8", "Authorization": ORS_API_KEY},
                 timeout=30.0
             )
             response.raise_for_status()
@@ -135,34 +140,33 @@ async def call_ors_api(payload: dict) -> dict:
 async def process_routes(routes: list) -> list:
     """Process and enrich routes with venue information"""
     processed = []
-
+    
     for route in routes:
         # Extract coordinates from route
         coordinates = route.get("geometry", {}).get("coordinates", [])
-
-        # Check each coordinate against venues and collect results
-        nearby_venues = []
-        async for venue in check_venues_along_route(coordinates):
-            nearby_venues.append(venue)
-
+        
+        # Check each coordinate against venues
+        nearby_venues = await check_venues_along_route(coordinates)
+        
         # Calculate penalties
         penalty_score = calculate_penalty(nearby_venues)
-
+        
         processed.append({
             "route": route,
             "nearby_venues": nearby_venues,
             "penalty_score": penalty_score
         })
-
+    
     # Sort by penalty score (lower is better)
     processed.sort(key=lambda x: x["penalty_score"])
-
+    
     return processed
 
 
 async def check_venues_along_route(coordinates: list):
     """Check which venues are near the route coordinates using MongoDB geospatial queries"""
     seen_venue_ids = set()  # Track venues we've already found to avoid duplicates
+    nearby_venues = []
 
     for coord in coordinates:
         # coord is [longitude, latitude] format from OpenRouteService
@@ -177,7 +181,7 @@ async def check_venues_along_route(coordinates: list):
             max_distance_meters=50
         )
 
-        # Yield unique venues with calculated distance
+        # Add unique venues with calculated distance
         for venue in venues:
             venue_id = venue.get('_id')
 
@@ -194,11 +198,13 @@ async def check_venues_along_route(coordinates: list):
                 else:
                     distance = 0  # Fallback if location data is missing
 
-                yield {
+                nearby_venues.append({
                     'venue': venue,
                     '_id': venue_id,
                     'distance': distance
-                }
+                })
+    
+    return nearby_venues
 
 def calculate_penalty(venues: list) -> float:
     """Calculate penalty score based on venue classes"""
@@ -207,8 +213,7 @@ def calculate_penalty(venues: list) -> float:
     
     total_penalty = 0.0
     current_time = datetime.now()
-    # today = current_time.strftime("%A")
-    today = "Monday" 
+    today = current_time.strftime("%A")
     
     for venue_data in venues:
         distance = venue_data['distance']
