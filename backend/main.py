@@ -2,7 +2,6 @@ from typing import Union
 import httpx
 import os
 import dotenv
-import anyio
 dotenv.load_dotenv()
 
 from models import RouteRequest
@@ -126,8 +125,7 @@ async def check_venues_along_route(coordinates: list):
         latitude = coord[1]
 
         # Query MongoDB for venues within 50m of this coordinate
-        venues = await anyio.to_thread.run_sync(
-            mongo.find_venues_near,
+        venues = await mongo.find_venues_near(
             'venues',
             longitude,
             latitude,
@@ -197,8 +195,7 @@ async def load_classes_by_venue(venues: list, today: str) -> dict:
 
     venue_ids = list({venue["_id"] for venue in venues})
 
-    classes = await anyio.to_thread.run_sync(
-        mongo.get_venues_classes_for_day,
+    classes = await mongo.get_venues_classes_for_day(
         venue_ids,
         today,
     )
@@ -400,7 +397,8 @@ async def get_venues_status():
             }
         ]
         
-        critical_venues = list(mongo.get_collection('venues').aggregate(pipeline))
+        cursor = mongo.get_collection('venues').aggregate(pipeline)
+        critical_venues = await cursor.to_list(length=None)
         
         return {
             'total_critical_venues': len(critical_venues),

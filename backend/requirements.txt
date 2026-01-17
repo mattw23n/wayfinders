@@ -25,6 +25,7 @@ pydantic-extra-types==2.11.0
 pydantic-settings==2.12.0
 pygments==2.19.2
 pymongo==4.16.0
+motor==3.7.1
 python-dotenv==1.2.1
 python-multipart==0.0.21
 pyyaml==6.0.3

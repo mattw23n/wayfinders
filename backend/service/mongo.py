@@ -1,7 +1,6 @@
 import os
 from typing import Any, Dict, List, Optional
-from pymongo import MongoClient
-from pymongo.errors import ConnectionFailure, DuplicateKeyError, ServerSelectionTimeoutError
+from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import dotenv_values
 
 
@@ -18,14 +17,8 @@ class MongoAPIClient:
         
         self.mongo_uri = mongo_uri or config.get("MONGO_DATABASE_URL") or os.getenv('MONGO_DATABASE_URL', 'mongodb://localhost:27017')
         self.db_name = db_name or config.get('MONGO_DB_NAME') or os.getenv('MONGO_DB_NAME', 'wayfinders')
-        
 
-        try:
-            self.client = MongoClient(self.mongo_uri, serverSelectionTimeoutMS=5000)
-            self.client.admin.command('ping')
-        except (ConnectionFailure, ServerSelectionTimeoutError) as e:
-            raise ConnectionError(f"Failed to connect to MongoDB at {self.mongo_uri}: {e}")
-
+        self.client = AsyncIOMotorClient(self.mongo_uri)
         self.db = self.client[self.db_name]
         
         self.classes_collection = self.db['classes']  # or whatever your classes collection name is
@@ -35,7 +28,7 @@ class MongoAPIClient:
         """Get a collection by name."""
         return self.db[collection_name]
 
-    def find_venues_near(self, collection_name: str, longitude: float, latitude: float, max_distance_meters: int) -> List[Dict[str, Any]]:
+    async def find_venues_near(self, collection_name: str, longitude: float, latitude: float, max_distance_meters: int) -> List[Dict[str, Any]]:
         """
         Find all venues within max_distance_meters from the given coordinate.
         Requires a 2dsphere geospatial index on the location.coordinates field.
@@ -60,7 +53,8 @@ class MongoAPIClient:
                 }
             }
         }
-        results = list(self.db[collection_name].find(query))
+        cursor = self.db[collection_name].find(query)
+        results = await cursor.to_list(length=None)
         for doc in results:
             doc['_id'] = str(doc['_id'])
         return results
@@ -68,7 +62,7 @@ class MongoAPIClient:
     def close(self):
         self.client.close()
         
-    def get_venue_classes_for_day(self, venue_id, day: str):
+    async def get_venue_classes_for_day(self, venue_id, day: str):
         """
         Get all classes for a specific venue on a given day
         
@@ -84,9 +78,10 @@ class MongoAPIClient:
             "day": day
         }
         
-        return list(self.classes_collection.find(query))
+        cursor = self.classes_collection.find(query)
+        return await cursor.to_list(length=None)
 
-    def get_venues_classes_for_day(self, venue_ids: List[str], day: str):
+    async def get_venues_classes_for_day(self, venue_ids: List[str], day: str):
         """
         Get all classes for a list of venues on a given day.
 
@@ -104,4 +99,5 @@ class MongoAPIClient:
             "venueId": {"$in": venue_ids},
             "day": day,
         }
-        return list(self.classes_collection.find(query))
+        cursor = self.classes_collection.find(query)
+        return await cursor.to_list(length=None)
