@@ -2,6 +2,7 @@ from typing import Union
 import httpx
 import os
 import dotenv
+import anyio
 dotenv.load_dotenv()
 
 from models import RouteRequest
@@ -9,7 +10,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from service.mongo import MongoAPIClient
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 app = FastAPI()
 
@@ -30,7 +31,7 @@ ORS_API_KEY = os.getenv("ORS_API_KEY")
 async def get_routes(request: RouteRequest):
     if not ORS_API_KEY:
         raise HTTPException(status_code=500, detail="ORS API key not configured")
-    
+
     # Prepare coordinates for ORS API
     coordinates = [
         [request.start.longitude, request.start.latitude],
@@ -49,7 +50,7 @@ async def get_routes(request: RouteRequest):
     
     # Call OpenRouteService API
     api_response = await call_ors_api(payload)
-    
+
     # Extract routes from response
     routes = api_response.get("features", [])
     
@@ -82,6 +83,9 @@ async def call_ors_api(payload: dict) -> dict:
 async def process_routes(routes: list) -> list:
     """Process and enrich routes with venue information"""
     processed = []
+    current_time = datetime.now()
+    # today = current_time.strftime("%A")
+    today = "Monday"
 
     for route in routes:
         # Extract coordinates from route
@@ -93,7 +97,12 @@ async def process_routes(routes: list) -> list:
             nearby_venues.append(venue)
 
         # Calculate penalties
-        penalty_score = calculate_penalty(nearby_venues)
+        classes_by_venue = await load_classes_by_venue(nearby_venues, today)
+        penalty_score = calculate_penalty(
+            nearby_venues,
+            classes_by_venue,
+            current_time,
+        )
 
         processed.append({
             "route": route,
@@ -117,11 +126,12 @@ async def check_venues_along_route(coordinates: list):
         latitude = coord[1]
 
         # Query MongoDB for venues within 50m of this coordinate
-        venues = mongo.find_venues_near(
-            collection_name='venues',
-            longitude=longitude,
-            latitude=latitude,
-            max_distance_meters=50
+        venues = await anyio.to_thread.run_sync(
+            mongo.find_venues_near,
+            'venues',
+            longitude,
+            latitude,
+            50,
         )
 
         # Yield unique venues with calculated distance
@@ -147,22 +157,19 @@ async def check_venues_along_route(coordinates: list):
                     'distance': distance
                 }
 
-def calculate_penalty(venues: list) -> float:
+def calculate_penalty(venues: list, classes_by_venue: dict, current_time: datetime) -> float:
     """Calculate penalty score based on venue classes"""
     if not venues:
         return 0.0
     
     total_penalty = 0.0
-    current_time = datetime.now()
-    # today = current_time.strftime("%A")
-    today = "Monday" 
     
     for venue_data in venues:
         distance = venue_data['distance']
         venue_id = venue_data['_id']
         
         # Query MongoDB for today's class schedule at this venue
-        classes = mongo.get_venue_classes_for_day(venue_id, today)
+        classes = classes_by_venue.get(venue_id, [])
         
         # print(f"Classes for venue {venue_id} on {today}: {classes}")
         
@@ -181,6 +188,29 @@ def calculate_penalty(venues: list) -> float:
                 total_penalty += penalty
     
     return total_penalty
+
+
+async def load_classes_by_venue(venues: list, today: str) -> dict:
+    """Load classes for all venue IDs in one query and group by venueId."""
+    if not venues:
+        return {}
+
+    venue_ids = list({venue["_id"] for venue in venues})
+
+    classes = await anyio.to_thread.run_sync(
+        mongo.get_venues_classes_for_day,
+        venue_ids,
+        today,
+    )
+
+    classes_by_venue = {}
+    for class_entry in classes:
+        venue_id = class_entry.get("venueId")
+        if venue_id is None:
+            continue
+        classes_by_venue.setdefault(venue_id, []).append(class_entry)
+
+    return classes_by_venue
 
 def is_class_critical_time(class_entry: dict, current_time: datetime) -> bool:
     """

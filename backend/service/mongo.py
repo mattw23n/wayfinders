@@ -85,3 +85,23 @@ class MongoAPIClient:
         }
         
         return list(self.classes_collection.find(query))
+
+    def get_venues_classes_for_day(self, venue_ids: List[str], day: str):
+        """
+        Get all classes for a list of venues on a given day.
+
+        Args:
+            venue_ids: List of venue IDs
+            day: Day name (e.g., "Monday", "Tuesday")
+
+        Returns:
+            List of class documents for the given day and venue IDs
+        """
+        if not venue_ids:
+            return []
+
+        query = {
+            "venueId": {"$in": venue_ids},
+            "day": day,
+        }
+        return list(self.classes_collection.find(query))
