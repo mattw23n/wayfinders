@@ -293,7 +293,8 @@ function MapContent() {
                         setIsTimeModalOpen(true);
                     }}
                 >
-                    <Settings className="h-5 w-5" />
+                    {/* <Settings className="h-5 w-5" /> */}
+                    <Clock className="h-5 w-5" />
                 </Button>
             </div>
 
