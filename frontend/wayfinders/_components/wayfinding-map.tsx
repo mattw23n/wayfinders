@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import {
     Map,
     MapMarker,
-    MapPopup,
     MapSearchControl,
     MapLayers,
     MapLayersControl,
@@ -12,10 +11,10 @@ import {
     MapZoomControl,
     MapLocateControl,
     MapPolyline,
+    MapTooltip,
 } from "@/components/ui/map";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Navigation } from "lucide-react";
+import { Navigation, MapPin } from "lucide-react";
 import { useTheme } from "next-themes";
 import type { LatLngExpression } from "leaflet";
 import type { PlaceFeature } from "@/components/ui/place-autocomplete";
@@ -49,14 +48,8 @@ function MapContent() {
         console.log("Start selected - full feature:", feature);
 
         const location: Location = {
-            name:
-                feature.properties.name ||
-                feature.properties.display_name?.split(",")[0] ||
-                "Start Location",
-            address:
-                feature.properties.display_name ||
-                feature.properties.name ||
-                "",
+            name: feature.properties.name || "Start Location",
+            address: feature.properties.name || "",
             coordinates: feature.geometry.coordinates.toReversed() as [
                 number,
                 number,
@@ -72,14 +65,8 @@ function MapContent() {
         console.log("End selected - full feature:", feature);
 
         const location: Location = {
-            name:
-                feature.properties.name ||
-                feature.properties.display_name?.split(",")[0] ||
-                "End Location",
-            address:
-                feature.properties.display_name ||
-                feature.properties.name ||
-                "",
+            name: feature.properties.name || "End Location",
+            address: feature.properties.name || "",
             coordinates: feature.geometry.coordinates.toReversed() as [
                 number,
                 number,
@@ -152,25 +139,9 @@ function MapContent() {
                 <MapMarker
                     key={`start-${startLocation.coordinates[0]}-${startLocation.coordinates[1]}`}
                     position={startLocation.coordinates as LatLngExpression}
+                    icon={<MapPin className="size-8 text-green-500" />}
                 >
-                    <MapPopup>
-                        <div className="text-sm min-w-[200px]">
-                            <div className="flex items-center gap-2 mb-1">
-                                <div className="h-2 w-2 rounded-full bg-green-500" />
-                                <Badge variant="outline" className="text-xs">
-                                    Start
-                                </Badge>
-                            </div>
-                            <div className="font-semibold">
-                                {startLocation.name}
-                            </div>
-                            {startLocation.address && (
-                                <div className="text-xs text-muted-foreground mt-1">
-                                    {startLocation.address}
-                                </div>
-                            )}
-                        </div>
-                    </MapPopup>
+                    <MapTooltip side="top">Start</MapTooltip>
                 </MapMarker>
             )}
 
@@ -179,25 +150,9 @@ function MapContent() {
                 <MapMarker
                     key={`end-${endLocation.coordinates[0]}-${endLocation.coordinates[1]}`}
                     position={endLocation.coordinates as LatLngExpression}
+                    icon={<MapPin className="size-8 text-red-500" />}
                 >
-                    <MapPopup>
-                        <div className="text-sm min-w-[200px]">
-                            <div className="flex items-center gap-2 mb-1">
-                                <div className="h-2 w-2 rounded-full bg-red-500" />
-                                <Badge variant="outline" className="text-xs">
-                                    Destination
-                                </Badge>
-                            </div>
-                            <div className="font-semibold">
-                                {endLocation.name}
-                            </div>
-                            {endLocation.address && (
-                                <div className="text-xs text-muted-foreground mt-1">
-                                    {endLocation.address}
-                                </div>
-                            )}
-                        </div>
-                    </MapPopup>
+                    <MapTooltip side="top">End</MapTooltip>
                 </MapMarker>
             )}
 
@@ -220,32 +175,18 @@ function MapContent() {
 
                     return (
                         <MapPolyline
+                            className="fill-none"
                             key={`route-${index}`}
                             positions={positions}
                             pathOptions={{
                                 color,
+
                                 weight: 5,
                                 opacity: 0.8,
                             }}
                         />
                     );
                 })}
-
-            {/* Temporary Route Line - only show if no calculated routes */}
-            {startLocation && endLocation && routes.length === 0 && (
-                <MapPolyline
-                    positions={[
-                        startLocation.coordinates as LatLngExpression,
-                        endLocation.coordinates as LatLngExpression,
-                    ]}
-                    pathOptions={{
-                        color: "#3b82f6",
-                        weight: 4,
-                        opacity: 0.7,
-                        dashArray: "10, 10",
-                    }}
-                />
-            )}
 
             {/* Calculate Route Button */}
             {startLocation && endLocation && (
@@ -276,7 +217,7 @@ function MapContent() {
 }
 
 export function WayfindingMap({
-    center = [1.290665504, 103.772663576],
+    center = [1.2959854, 103.7766606],
     zoom = 16,
 }: WayfindingMapProps) {
     const { theme, setTheme } = useTheme();
