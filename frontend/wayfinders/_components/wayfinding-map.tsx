@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
     Map,
     MapMarker,
@@ -14,9 +14,10 @@ import {
     MapTooltip,
 } from "@/components/ui/map";
 import { Button } from "@/components/ui/button";
-import { Navigation, MapPin } from "lucide-react";
+import { Navigation, MapPin, ChevronUp, ChevronDown, Clock, Route as RouteIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import type { LatLngExpression } from "leaflet";
+import L from "leaflet";
 import type { PlaceFeature } from "@/components/ui/place-autocomplete";
 import { useMap } from "react-leaflet";
 
@@ -48,6 +49,16 @@ function MapContent() {
     const [endLocation, setEndLocation] = useState<Location | null>(null);
     const [routes, setRoutes] = useState<RouteData[]>([]);
     const [loading, setLoading] = useState(false);
+    const [isPanelOpen, setIsPanelOpen] = useState(false);
+    const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
+    const panelRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (panelRef.current) {
+            L.DomEvent.disableScrollPropagation(panelRef.current);
+            L.DomEvent.disableClickPropagation(panelRef.current);
+        }
+    }, [routes]);
 
     const handleStartSelect = (feature: PlaceFeature) => {
         console.log("Start selected - full feature:", feature);
@@ -112,6 +123,8 @@ function MapContent() {
             const data = await response.json();
             console.log("Routes received:", data);
             setRoutes(data.routes || []);
+            setSelectedRouteIndex(0);
+            setIsPanelOpen(true);
         } catch (error) {
             console.error("Error calculating route:", error);
             alert("Failed to calculate route. Please try again.");
@@ -188,10 +201,8 @@ function MapContent() {
                                 color,
                                 weight: 5,
                                 opacity: 0.8,
-                                fillColor: color,
-                                fillOpacity: 0,
                             }}
-                            className=""
+                            className="fill-none"
                         />
                     );
                 })}
@@ -208,6 +219,110 @@ function MapContent() {
                         <Navigation className="mr-2 h-5 w-5" />
                         {loading ? "Calculating..." : "Calculate Route"}
                     </Button>
+                </div>
+            )}
+
+            {/* Swipe-up Panel for Route Instructions */}
+            {routes.length > 0 && (
+                <div
+                    ref={panelRef}
+                    className="fixed left-0 right-0 bg-background border-t border-border shadow-2xl transition-transform duration-300 ease-in-out z-2000 pointer-events-auto bottom-0"
+                    style={{
+                        maxHeight: "70vh",
+                        transform: isPanelOpen ? "translateY(0)" : "translateY(calc(100% - 60px))"
+                    }}
+                >
+                    {/* Panel Header */}
+                    <div
+                        className="flex items-center justify-between p-4 cursor-pointer border-b"
+                        onClick={() => setIsPanelOpen(!isPanelOpen)}
+                    >
+                        <div className="flex items-center gap-2">
+                            <RouteIcon className="h-5 w-5" />
+                            <h3 className="font-semibold">
+                                {routes.length} Route{routes.length > 1 ? "s" : ""} Found
+                            </h3>
+                        </div>
+                        {isPanelOpen ? (
+                            <ChevronDown className="h-5 w-5" />
+                        ) : (
+                            <ChevronUp className="h-5 w-5" />
+                        )}
+                    </div>
+
+                    {/* Panel Content */}
+                    <div className="overflow-y-auto" style={{ maxHeight: "calc(70vh - 60px)" }}>
+                        {/* Route Tabs */}
+                        <div className="flex gap-2 p-4 border-b overflow-x-auto">
+                            {routes.map((routeData, index) => {
+                                const summary = routeData.route?.properties?.summary;
+                                const distance = summary?.distance || 0;
+                                const duration = summary?.duration || 0;
+                                const colors = ["border-green-500 bg-green-50 dark:bg-green-950", "border-blue-500 bg-blue-50 dark:bg-blue-950", "border-orange-500 bg-orange-50 dark:bg-orange-950"];
+                                const colorClass = colors[index] || "border-gray-500 bg-gray-50 dark:bg-gray-950";
+
+                                return (
+                                    <button
+                                        key={index}
+                                        onClick={() => setSelectedRouteIndex(index)}
+                                        className={`shrink-0 px-4 py-3 rounded-lg border-2 transition-all ${
+                                            selectedRouteIndex === index
+                                                ? colorClass
+                                                : "border-border bg-muted"
+                                        }`}
+                                    >
+                                        <div className="text-xs font-medium mb-1">
+                                            Route {index + 1}
+                                        </div>
+                                        <div className="flex items-center gap-3 text-xs">
+                                            <span className="flex items-center gap-1">
+                                                <Clock className="h-3 w-3" />
+                                                {Math.round(duration / 60)} min
+                                            </span>
+                                            <span>{Math.round(distance)} m</span>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground mt-1">
+                                            Crowdedness: {routeData.penalty_score.toFixed(0)}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* Turn-by-turn Instructions */}
+                        <div className="p-4">
+                            {routes[selectedRouteIndex]?.route?.properties?.segments?.[0]?.steps?.map(
+                                (step: any, stepIndex: number) => (
+                                    <div
+                                        key={stepIndex}
+                                        className="flex gap-3 mb-4 last:mb-0"
+                                    >
+                                        <div className="flex flex-col items-center">
+                                            <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">
+                                                {stepIndex + 1}
+                                            </div>
+                                            {stepIndex < routes[selectedRouteIndex].route.properties.segments[0].steps.length - 1 && (
+                                                <div className="w-0.5 h-full bg-border mt-1" />
+                                            )}
+                                        </div>
+                                        <div className="flex-1 pb-2">
+                                            <p className="font-medium">
+                                                {step.instruction}
+                                            </p>
+                                            {step.name && step.name !== "-" && (
+                                                <p className="text-sm text-muted-foreground">
+                                                    on {step.name}
+                                                </p>
+                                            )}
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                {Math.round(step.distance)} m • {Math.round(step.duration / 60)} min
+                                            </p>
+                                        </div>
+                                    </div>
+                                )
+                            )}
+                        </div>
+                    </div>
                 </div>
             )}
         </>
