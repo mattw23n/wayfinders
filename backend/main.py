@@ -216,4 +216,3 @@ def is_class_critical_time(class_entry: dict, current_time: datetime) -> bool:
 
 # TODO: Create get endpoint to see all venues and their current statuses (ongoing class or no) to visualize with a map
 
-

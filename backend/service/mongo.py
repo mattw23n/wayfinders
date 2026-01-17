@@ -35,6 +35,36 @@ class MongoAPIClient:
         """Get a collection by name."""
         return self.db[collection_name]
 
+    def find_venues_near(self, collection_name: str, longitude: float, latitude: float, max_distance_meters: int) -> List[Dict[str, Any]]:
+        """
+        Find all venues within max_distance_meters from the given coordinate.
+        Requires a 2dsphere geospatial index on the location.coordinates field.
+
+        Args:
+            collection_name: Collection to query
+            longitude: Longitude of the center point
+            latitude: Latitude of the center point
+            max_distance_meters: Maximum distance in meters
+
+        Returns:
+            List of venues sorted by distance (closest first)
+        """
+        query = {
+            "location.coordinates": {
+                "$near": {
+                    "$geometry": {
+                        "type": "Point",
+                        "coordinates": [longitude, latitude]
+                    },
+                    "$maxDistance": max_distance_meters
+                }
+            }
+        }
+        results = list(self.db[collection_name].find(query))
+        for doc in results:
+            doc['_id'] = str(doc['_id'])
+        return results
+
     def close(self):
         self.client.close()
         
