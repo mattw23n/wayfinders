@@ -15,9 +15,10 @@ class MongoAPIClient:
             db_name: Database name. Defaults to MONGO_DB_NAME env var.
         """
         config = dotenv_values()
-
+        
         self.mongo_uri = mongo_uri or config.get("MONGO_DATABASE_URL") or os.getenv('MONGO_DATABASE_URL', 'mongodb://localhost:27017')
         self.db_name = db_name or config.get('MONGO_DB_NAME') or os.getenv('MONGO_DB_NAME', 'wayfinders')
+        
 
         try:
             self.client = MongoClient(self.mongo_uri, serverSelectionTimeoutMS=5000)
@@ -26,6 +27,9 @@ class MongoAPIClient:
             raise ConnectionError(f"Failed to connect to MongoDB at {self.mongo_uri}: {e}")
 
         self.db = self.client[self.db_name]
+        
+        self.classes_collection = self.db['classes']  # or whatever your classes collection name is
+        self.venues_collection = self.db['venues'] 
 
     def get_collection(self, collection_name: str):
         """Get a collection by name."""
@@ -33,3 +37,21 @@ class MongoAPIClient:
 
     def close(self):
         self.client.close()
+        
+    def get_venue_classes_for_day(self, venue_id, day: str):
+        """
+        Get all classes for a specific venue on a given day
+        
+        Args:
+            venue_id: Venue ID
+            day: Day name (e.g., "Monday", "Tuesday")
+        
+        Returns:
+            List of class documents for that day
+        """
+        query = {
+            "venueId": venue_id,
+            "day": day
+        }
+        
+        return list(self.classes_collection.find(query))
