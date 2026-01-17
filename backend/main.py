@@ -6,9 +6,11 @@ dotenv.load_dotenv()
 
 from models import RouteRequest
 from fastapi import FastAPI, HTTPException
+from service.mongo import MongoAPIClient
 
 app = FastAPI()
 
+mongo = MongoAPIClient()
 ORS_BASE_URL = os.getenv("ORS_BASE_URL")
 ORS_API_KEY = os.getenv("ORS_API_KEY")
 
