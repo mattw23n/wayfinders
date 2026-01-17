@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Optional, Union
 import httpx
 import os
 import dotenv
@@ -12,7 +12,7 @@ from langchain_core.output_parsers import StrOutputParser
 dotenv.load_dotenv()
 
 from models import RouteRequest
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from service.mongo import MongoAPIClient
 from datetime import datetime
@@ -113,10 +113,19 @@ async def get_explanation_for_route(route_data: dict, all_routes: list) -> str:
 
 
 @app.post("/routes/")
-async def get_routes(request: RouteRequest):
+async def get_routes(request: RouteRequest, current_datetime: Optional[str] = Query(None, description="Current date and time in ISO format")):
     if not ORS_API_KEY:
         raise HTTPException(status_code=500, detail="ORS API key not configured")
-
+    
+    # Parse datetime or use current time
+    if current_datetime:
+        try:
+            current_time = datetime.fromisoformat(current_datetime)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid datetime format. Use ISO format: YYYY-MM-DDTHH:MM:SS")
+    else:
+        current_time = datetime.now()
+    
     # Prepare coordinates for ORS API
     coordinates = [
         [request.start.longitude, request.start.latitude],
@@ -133,7 +142,7 @@ async def get_routes(request: RouteRequest):
     
     # Time the route processing
     start_time = datetime.now()
-    processed_routes = await process_routes(routes)
+    processed_routes = await process_routes(routes, current_time)
     print(f"Route processing took: {(datetime.now() - start_time).total_seconds():.2f}s")
     
     # Time the LLM explanation generation
@@ -179,11 +188,10 @@ async def call_ors_api(payload: dict) -> dict:
         except httpx.HTTPError as e:
             raise HTTPException(status_code=500, detail=f"Error calling ORS API: {str(e)}")
 
-async def process_routes(routes: list) -> list:
+async def process_routes(routes: list, current_time: datetime) -> list:
     """Process and enrich routes with venue information"""
     processed = []
-    today = datetime.now().strftime("%A")
-    current_time = datetime(2026, 1, 19, 11, 50)
+    today = current_time.strftime("%A")
 
     for route in routes:
         # Extract coordinates from route
@@ -197,6 +205,7 @@ async def process_routes(routes: list) -> list:
         penalty_score = calculate_penalty(
             nearby_venues,
             classes_by_venue,
+            current_time
         )
         
         # Get critical venues with their classes
@@ -289,13 +298,12 @@ async def check_venues_along_route(coordinates: list):
 
     return nearby_venues
 
-def calculate_penalty(venues: list, classes_by_venue: dict) -> float:
+def calculate_penalty(venues: list, classes_by_venue: dict, current_time:datetime) -> float:
     """Calculate penalty score based on venue classes"""
     if not venues:
         return 0.0
     
     total_penalty = 0.0
-    current_time = datetime(2026, 1, 19, 11, 50)
     
     for venue_data in venues:
         distance = venue_data['distance']
@@ -428,13 +436,20 @@ def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 
 # TODO: Create get endpoint to see all venues and their current statuses (ongoing class or no) to visualize with a map
 @app.get("/venues/status")
-async def get_venues_status():
+async def get_venues_status(current_datetime: Optional[str] = Query(None, description="Current date and time in ISO format")):
     """
     Get all venues with their current class status
     Returns venues with information about ongoing or upcoming classes
     """
     try:
-        current_time = datetime(2026, 1, 19, 11, 50)
+        if current_datetime:
+            try:
+                current_time = datetime.fromisoformat(current_datetime)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid datetime format. Use ISO format: YYYY-MM-DDTHH:MM:SS")
+        else:
+            current_time = datetime.now()
+        
         today = current_time.strftime("%A")
         
         # Calculate time window (current time ± 15 minutes)
