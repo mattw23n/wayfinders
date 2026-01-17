@@ -2,6 +2,9 @@ from typing import Union
 import httpx
 import os
 import dotenv
+import google.generativeai as genai
+import asyncio
+
 dotenv.load_dotenv()
 
 from models import RouteRequest
@@ -25,6 +28,56 @@ app.add_middleware(
 mongo = MongoAPIClient()
 ORS_BASE_URL = os.getenv("ORS_BASE_URL")
 ORS_API_KEY = os.getenv("ORS_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+
+async def get_explanation_for_route(route_data: dict, all_routes: list) -> str:
+    """
+    Uses a Generative LLM to create a human-readable explanation for a single route,
+    providing context about how it compares to the other options.
+    """
+    if not GEMINI_API_KEY:
+        return "LLM explanation not available: GEMINI_API_KEY not configured."
+
+    try:
+        model = genai.GenerativeModel('gemini-pro')
+
+        # Simplify the data for the prompt to reduce token count
+        current_route_summary = route_data.get("route", {}).get("properties", {}).get("summary", {})
+        current_route_simplified = {
+            "duration_minutes": round(current_route_summary.get("duration", 0) / 60, 1),
+            "distance_meters": round(current_route_summary.get("distance", 0)),
+            "penalty_score": round(route_data.get("penalty_score", 0)),
+            "is_recommended": route_data == all_routes[0]  # Check if it's the top-ranked route
+        }
+
+        prompt = f"""
+        You are explaining a single pedestrian route option to a user.
+        The user is choosing between {len(all_routes)} options.
+        The most important factor is the 'penalty_score', where lower is better because it means the route is less crowded.
+
+        This specific route has the following characteristics:
+        - Duration: {current_route_simplified['duration_minutes']} minutes
+        - Distance: {current_route_simplified['distance_meters']} meters
+        - Crowdedness Score (lower is better): {current_route_simplified['penalty_score']}
+
+        It is the recommended route: {'Yes' if current_route_simplified['is_recommended'] else 'No'}.
+
+        Please provide a very short, one-sentence explanation for this specific route.
+        - If it is the recommended route, start with "Best choice:" and explain why (e.g., "it's the least crowded path").
+        - If it is NOT the recommended route, explain its trade-off (e.g., "A bit faster, but goes through busier areas.").
+        - Be encouraging and friendly. Avoid technical jargon.
+        """
+
+        response = await model.generate_content_async(prompt)
+        return response.text.strip()
+
+    except Exception as e:
+        print(f"Error calling Gemini API for a route: {e}")
+        return "Could not generate an explanation for this route due to an error."
+
 
 @app.post("/routes/")
 async def get_routes(request: RouteRequest):
@@ -53,12 +106,25 @@ async def get_routes(request: RouteRequest):
     # Extract routes from response
     routes = api_response.get("features", [])
     
-    # Process routes (all your business logic here)
+    # Process routes (calculate penalties and sort)
     processed_routes = process_routes(routes)
     
+    # Concurrently generate an explanation for each route
+    if processed_routes and GEMINI_API_KEY:
+        explanation_tasks = [get_explanation_for_route(route, processed_routes) for route in processed_routes]
+        explanations = await asyncio.gather(*explanation_tasks)
+        
+        # Add the generated explanation to each route object
+        for route, explanation in zip(processed_routes, explanations):
+            route["explanation"] = explanation
+    else:
+        # If no LLM key or no routes, add a placeholder
+        for route in processed_routes:
+            route["explanation"] = "Explanation not available."
+
     return {
         "routes": processed_routes,
-        "raw_response": api_response
+        "raw_ors_response": api_response
     }
     
 async def call_ors_api(payload: dict) -> dict:
