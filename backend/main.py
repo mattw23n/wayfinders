@@ -150,6 +150,7 @@ async def call_ors_api(payload: dict) -> dict:
 async def process_routes(routes: list) -> list:
     """Process and enrich routes with venue information"""
     processed = []
+    today = datetime.now().strftime("%A")
 
     for route in routes:
         # Extract coordinates from route
@@ -212,11 +213,13 @@ async def check_venues_along_route(coordinates: list):
                 else:
                     distance = 0  # Fallback if location data is missing
 
-                yield {
+                nearby_venues.append({
                     'venue': venue,
                     '_id': venue_id,
                     'distance': distance
-                }
+                })
+
+    return nearby_venues
 
 def calculate_penalty(venues: list, classes_by_venue: dict) -> float:
     """Calculate penalty score based on venue classes"""
