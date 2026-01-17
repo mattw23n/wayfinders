@@ -1,99 +1,95 @@
 "use client"
 
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { ButtonGroup } from "@/components/ui/button-group"
+import {cn} from "@/lib/utils"
+import {Button} from "@/components/ui/button"
+import {ButtonGroup} from "@/components/ui/button-group"
 import {
-    DropdownMenu,
-    DropdownMenuCheckboxItem,
-    DropdownMenuContent,
-    DropdownMenuLabel,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-    PlaceAutocomplete,
-    type PlaceAutocompleteProps,
-} from "@/components/ui/place-autocomplete"
-import type { CheckboxItem } from "@radix-ui/react-dropdown-menu"
+import {PlaceAutocomplete, type PlaceAutocompleteProps,} from "@/components/ui/place-autocomplete"
+import type {CheckboxItem} from "@radix-ui/react-dropdown-menu"
 import type {
-    Circle,
-    CircleMarker,
-    DivIconOptions,
-    Draw,
-    DrawEvents,
-    DrawMap,
-    DrawOptions,
-    EditToolbar,
-    ErrorEvent,
-    FeatureGroup,
-    LatLngExpression,
-    LayerGroup,
-    Map as LeafletMap,
-    LocateOptions,
-    LocationEvent,
-    Marker,
-    MarkerCluster,
-    PointExpression,
-    Polygon,
-    Polyline,
-    Popup,
-    Rectangle,
-    TileLayer,
-    Tooltip,
+  Circle,
+  CircleMarker,
+  DivIconOptions,
+  Draw,
+  DrawEvents,
+  DrawMap,
+  DrawOptions,
+  EditToolbar,
+  ErrorEvent,
+  FeatureGroup,
+  LatLngExpression,
+  LayerGroup,
+  LocateOptions,
+  LocationEvent,
+  Map as LeafletMap,
+  Marker,
+  MarkerCluster,
+  PointExpression,
+  Polygon,
+  Polyline,
+  Popup,
+  Rectangle,
+  TileLayer,
+  Tooltip,
 } from "leaflet"
 import "leaflet-draw/dist/leaflet.draw.css"
-import type {} from "leaflet.markercluster"
 import "leaflet.markercluster/dist/MarkerCluster.css"
 import "leaflet.markercluster/dist/MarkerCluster.Default.css"
 import "leaflet/dist/leaflet.css"
 import {
-    CircleIcon,
-    LayersIcon,
-    LoaderCircleIcon,
-    MapPinIcon,
-    MinusIcon,
-    NavigationIcon,
-    PenLineIcon,
-    PentagonIcon,
-    PlusIcon,
-    SquareIcon,
-    Trash2Icon,
-    Undo2Icon,
-    WaypointsIcon,
+  CircleIcon,
+  LayersIcon,
+  LoaderCircleIcon,
+  MapPinIcon,
+  MinusIcon,
+  NavigationIcon,
+  PenLineIcon,
+  PentagonIcon,
+  PlusIcon,
+  SquareIcon,
+  Trash2Icon,
+  Undo2Icon,
+  WaypointsIcon,
 } from "lucide-react"
-import { useTheme } from "next-themes"
+import {useTheme} from "next-themes"
 import React, {
-    Suspense,
-    createContext,
-    lazy,
-    useContext,
-    useEffect,
-    useRef,
-    useState,
-    type ComponentType,
-    type ReactNode,
-    type Ref,
+  type ComponentType,
+  createContext,
+  lazy,
+  type ReactNode,
+  type Ref,
+  Suspense,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
 } from "react"
-import { renderToString } from "react-dom/server"
+import {renderToString} from "react-dom/server"
 import {
-    useMap,
-    useMapEvents,
-    type CircleMarkerProps,
-    type CircleProps,
-    type LayerGroupProps,
-    type MapContainerProps,
-    type MarkerProps,
-    type PolygonProps,
-    type PolylineProps,
-    type PopupProps,
-    type RectangleProps,
-    type TileLayerProps,
-    type TooltipProps,
+  type CircleMarkerProps,
+  type CircleProps,
+  type LayerGroupProps,
+  type MapContainerProps,
+  type MarkerProps,
+  type PolygonProps,
+  type PolylineProps,
+  type PopupProps,
+  type RectangleProps,
+  type TileLayerProps,
+  type TooltipProps,
+  useMap,
+  useMapEvents,
 } from "react-leaflet"
-import type { MarkerClusterGroupProps } from "react-leaflet-markercluster"
+import type {MarkerClusterGroupProps} from "react-leaflet-markercluster"
 
 function createLazyComponent<T extends ComponentType<any>>(
     factory: () => Promise<{ default: T }>
@@ -747,7 +743,11 @@ function MapTooltip({
     )
 }
 
-function MapZoomControl({ className, ...props }: React.ComponentProps<"div">) {
+function MapZoomControl({
+                          className,
+                          orientation = "vertical",
+                          ...props
+                        }: React.ComponentProps<"div"> & { orientation?: "vertical" | "horizontal" }) {
     const map = useMap()
     const [zoomLevel, setZoomLevel] = useState(map.getZoom())
 
@@ -760,7 +760,7 @@ function MapZoomControl({ className, ...props }: React.ComponentProps<"div">) {
     return (
         <MapControlContainer className={cn("top-1 left-1", className)}>
             <ButtonGroup
-                orientation="vertical"
+              orientation={orientation}
                 aria-label="Zoom controls"
                 {...props}>
                 <Button

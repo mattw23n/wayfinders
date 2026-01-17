@@ -1,42 +1,39 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import {useEffect, useRef, useState} from "react";
 import {
-    Map,
-    MapMarker,
-    MapSearchControl,
-    MapLayers,
-    MapLayersControl,
-    MapTileLayer,
-    MapZoomControl,
-    MapLocateControl,
-    MapPolyline,
-    MapTooltip,
-    MapMarkerClusterGroup
+  Map,
+  MapLayers,
+  MapLayersControl,
+  MapLocateControl,
+  MapMarker,
+  MapMarkerClusterGroup,
+  MapPolyline,
+  MapSearchControl,
+  MapTileLayer,
+  MapTooltip,
+  MapZoomControl
 } from "@/components/ui/map";
-import { Button } from "@/components/ui/button";
+import {Button} from "@/components/ui/button";
 import {
-    Navigation,
-    MapPin,
-    ChevronUp,
-    ChevronDown,
-    Clock,
-    Route as RouteIcon,
-    Settings,
-    X,
-    Volume2,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  MapPin,
+  Navigation,
+  Route as RouteIcon,
+  Settings,
+  Volume2,
+  X,
 } from "lucide-react";
-import {
-    useNavigation,
-    type RouteData as NavRouteData,
-} from "@/hooks/use-navigation";
-import { NavigationOverlay } from "@/_components/navigation-overlay";
-import { useTheme } from "next-themes";
-import type { LatLngExpression } from "leaflet";
+import {type RouteData as NavRouteData, useNavigation,} from "@/hooks/use-navigation";
+import {NavigationOverlay} from "@/_components/navigation-overlay";
+import {useTheme} from "next-themes";
+import type {LatLngExpression} from "leaflet";
 // import L from "leaflet";
-import type { PlaceFeature } from "@/components/ui/place-autocomplete";
-import { useMap } from "react-leaflet";
-import type { NearbyVenue, RouteData, RouteStep } from "@/types/route";
+import type {PlaceFeature} from "@/components/ui/place-autocomplete";
+import {useMap} from "react-leaflet";
+import type {NearbyVenue, RouteData, RouteStep} from "@/types/route";
 
 interface WayfindingMapProps {
     center?: [number, number];
@@ -58,6 +55,7 @@ const SINGAPORE_BBOX: [number, number, number, number] = [
 
 function MapContent() {
     const map = useMap();
+  const PANEL_COLLAPSED_HEIGHT = 60;
     const [simulationTime, setSimulationTime] = useState("2026-01-19T11:50:00");
     const [isTimeModalOpen, setIsTimeModalOpen] = useState(false);
     const [tempTime, setTempTime] = useState("");
@@ -68,6 +66,7 @@ function MapContent() {
     const [isPanelOpen, setIsPanelOpen] = useState(false);
     const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
     const [crowdedVenues, setCrowdedVenues] = useState<VenueStatus[]>([]);
+  const [panelHeight, setPanelHeight] = useState(0);
     const panelRef = useRef<HTMLDivElement>(null);
 
     // Navigation state
@@ -95,6 +94,47 @@ function MapContent() {
             });
         }
     }, [routes]);
+
+  useEffect(() => {
+    if (!panelRef.current || routes.length === 0) {
+      setPanelHeight(0);
+      return;
+    }
+
+    const panelElement = panelRef.current;
+    const updatePanelHeight = () => {
+      setPanelHeight(panelElement.getBoundingClientRect().height);
+    };
+
+    updatePanelHeight();
+
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const resizeObserver = new ResizeObserver(updatePanelHeight);
+    resizeObserver.observe(panelElement);
+    return () => resizeObserver.disconnect();
+  }, [routes.length]);
+
+  useEffect(() => {
+    const container = map.getContainer();
+    const visiblePanelHeight =
+      routes.length > 0
+        ? isPanelOpen
+          ? panelHeight
+          : PANEL_COLLAPSED_HEIGHT
+        : 0;
+
+    container.style.setProperty(
+      "--route-panel-offset",
+      `${visiblePanelHeight}px`,
+    );
+
+    return () => {
+      container.style.removeProperty("--route-panel-offset");
+    };
+  }, [map, panelHeight, isPanelOpen, routes.length]);
 
     // Fetch crowded venues on mount
     useEffect(() => {
@@ -311,8 +351,18 @@ function MapContent() {
                 </div>
             )}
 
-            <MapLocateControl className="top-auto right-4 bottom-18 left-auto" />
-            <MapZoomControl className="top-auto right-4 bottom-28 left-auto" />
+          <div
+            className={`absolute right-4 z-1000 flex pointer-events-auto gap-3 bottom-[calc(var(--route-panel-offset,0px)+0.75rem)] ${
+              isPanelOpen ? "flex-row items-end" : "flex-col items-end"
+            }`}
+          >
+            <MapZoomControl
+              orientation={isPanelOpen ? "horizontal" : "vertical"}
+              className="!static !top-auto !right-auto !bottom-auto !left-auto"
+            />
+            <MapLocateControl className="!static !top-auto !right-auto !bottom-auto !left-auto"/>
+            <MapLayersControl className="!static !top-auto !right-auto !bottom-auto !left-auto"/>
+          </div>
 
             {/* Start Location Marker - GREEN */}
             {startLocation && (
@@ -711,8 +761,6 @@ export function WayfindingMap({
         <div className="relative w-full h-screen">
             <Map center={center} zoom={zoom} className="w-full h-full">
                 <MapLayers defaultTileLayer="Light">
-                    <MapLayersControl className="top-auto right-4 left-auto bottom-8" />
-
                     <MapTileLayer
                         name="Streets"
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -742,9 +790,8 @@ export function WayfindingMap({
                         url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
                         attribution="&copy; CARTO"
                     />
+                  <MapContent/>
                 </MapLayers>
-
-                <MapContent />
             </Map>
         </div>
     );
