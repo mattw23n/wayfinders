@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import {
     Map,
     MapMarker,
-    MapPopup,
     MapSearchControl,
     MapLayers,
     MapLayersControl,
@@ -12,9 +11,9 @@ import {
     MapZoomControl,
     MapLocateControl,
     MapPolyline,
+    MapTooltip,
 } from "@/components/ui/map";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Navigation, MapPin } from "lucide-react";
 import { useTheme } from "next-themes";
 import type { LatLngExpression } from "leaflet";
@@ -142,24 +141,7 @@ function MapContent() {
                     position={startLocation.coordinates as LatLngExpression}
                     icon={<MapPin className="size-8 text-green-500" />}
                 >
-                    <MapPopup>
-                        <div className="text-sm min-w-[200px]">
-                            <div className="flex items-center gap-2 mb-1">
-                                <div className="h-2 w-2 rounded-full bg-green-500" />
-                                <Badge variant="outline" className="text-xs">
-                                    Start
-                                </Badge>
-                            </div>
-                            <div className="font-semibold">
-                                {startLocation.name}
-                            </div>
-                            {startLocation.address && (
-                                <div className="text-xs text-muted-foreground mt-1">
-                                    {startLocation.address}
-                                </div>
-                            )}
-                        </div>
-                    </MapPopup>
+                    <MapTooltip side="top">Start</MapTooltip>
                 </MapMarker>
             )}
 
@@ -170,24 +152,7 @@ function MapContent() {
                     position={endLocation.coordinates as LatLngExpression}
                     icon={<MapPin className="size-8 text-red-500" />}
                 >
-                    <MapPopup>
-                        <div className="text-sm min-w-[200px]">
-                            <div className="flex items-center gap-2 mb-1">
-                                <div className="h-2 w-2 rounded-full bg-red-500" />
-                                <Badge variant="outline" className="text-xs">
-                                    Destination
-                                </Badge>
-                            </div>
-                            <div className="font-semibold">
-                                {endLocation.name}
-                            </div>
-                            {endLocation.address && (
-                                <div className="text-xs text-muted-foreground mt-1">
-                                    {endLocation.address}
-                                </div>
-                            )}
-                        </div>
-                    </MapPopup>
+                    <MapTooltip side="top">End</MapTooltip>
                 </MapMarker>
             )}
 
@@ -210,32 +175,18 @@ function MapContent() {
 
                     return (
                         <MapPolyline
+                            className="fill-none"
                             key={`route-${index}`}
                             positions={positions}
                             pathOptions={{
                                 color,
+
                                 weight: 5,
                                 opacity: 0.8,
                             }}
                         />
                     );
                 })}
-
-            {/* Temporary Route Line - only show if no calculated routes */}
-            {startLocation && endLocation && routes.length === 0 && (
-                <MapPolyline
-                    positions={[
-                        startLocation.coordinates as LatLngExpression,
-                        endLocation.coordinates as LatLngExpression,
-                    ]}
-                    pathOptions={{
-                        color: "#3b82f6",
-                        weight: 4,
-                        opacity: 0.7,
-                        dashArray: "10, 10",
-                    }}
-                />
-            )}
 
             {/* Calculate Route Button */}
             {startLocation && endLocation && (
