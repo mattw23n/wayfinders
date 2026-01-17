@@ -25,7 +25,7 @@ explanation_chain = None
 if ANTHROPIC_API_KEY:
     # Initialize the LangChain model with Claude
     llm = ChatAnthropic(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-haiku-4-5-20251001",
         anthropic_api_key=ANTHROPIC_API_KEY,
         temperature=0,
         max_retries=2,  # Add retry logic
