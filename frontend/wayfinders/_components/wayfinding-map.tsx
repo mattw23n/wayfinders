@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
     Map,
     MapMarker,
-    MapPopup,
     MapSearchControl,
     MapLayers,
     MapLayersControl,
@@ -12,12 +11,13 @@ import {
     MapZoomControl,
     MapLocateControl,
     MapPolyline,
+    MapTooltip,
 } from "@/components/ui/map";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Navigation } from "lucide-react";
+import { Navigation, MapPin, ChevronUp, ChevronDown, Clock, Route as RouteIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import type { LatLngExpression } from "leaflet";
+import L from "leaflet";
 import type { PlaceFeature } from "@/components/ui/place-autocomplete";
 import { useMap } from "react-leaflet";
 
@@ -38,25 +38,34 @@ interface RouteData {
     penalty_score: number;
 }
 
+// Singapore bounding box: [minLon, minLat, maxLon, maxLat]
+const SINGAPORE_BBOX: [number, number, number, number] = [
+    103.6, 1.15, 104.1, 1.47,
+];
+
 function MapContent() {
     const map = useMap();
     const [startLocation, setStartLocation] = useState<Location | null>(null);
     const [endLocation, setEndLocation] = useState<Location | null>(null);
     const [routes, setRoutes] = useState<RouteData[]>([]);
     const [loading, setLoading] = useState(false);
+    const [isPanelOpen, setIsPanelOpen] = useState(false);
+    const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
+    const panelRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (panelRef.current) {
+            L.DomEvent.disableScrollPropagation(panelRef.current);
+            L.DomEvent.disableClickPropagation(panelRef.current);
+        }
+    }, [routes]);
 
     const handleStartSelect = (feature: PlaceFeature) => {
         console.log("Start selected - full feature:", feature);
 
         const location: Location = {
-            name:
-                feature.properties.name ||
-                feature.properties.display_name?.split(",")[0] ||
-                "Start Location",
-            address:
-                feature.properties.display_name ||
-                feature.properties.name ||
-                "",
+            name: feature.properties.name || "Start Location",
+            address: feature.properties.name || "",
             coordinates: feature.geometry.coordinates.toReversed() as [
                 number,
                 number,
@@ -72,14 +81,8 @@ function MapContent() {
         console.log("End selected - full feature:", feature);
 
         const location: Location = {
-            name:
-                feature.properties.name ||
-                feature.properties.display_name?.split(",")[0] ||
-                "End Location",
-            address:
-                feature.properties.display_name ||
-                feature.properties.name ||
-                "",
+            name: feature.properties.name || "End Location",
+            address: feature.properties.name || "",
             coordinates: feature.geometry.coordinates.toReversed() as [
                 number,
                 number,
@@ -120,6 +123,8 @@ function MapContent() {
             const data = await response.json();
             console.log("Routes received:", data);
             setRoutes(data.routes || []);
+            setSelectedRouteIndex(0);
+            setIsPanelOpen(true);
         } catch (error) {
             console.error("Error calculating route:", error);
             alert("Failed to calculate route. Please try again.");
@@ -135,6 +140,7 @@ function MapContent() {
                 className="top-1 left-1 z-9999"
                 placeholder="Search start location..."
                 onPlaceSelect={handleStartSelect}
+                bbox={SINGAPORE_BBOX}
             />
 
             {/* Second Search Control - END */}
@@ -142,6 +148,7 @@ function MapContent() {
                 className="top-12 left-1"
                 placeholder="Search destination..."
                 onPlaceSelect={handleEndSelect}
+                bbox={SINGAPORE_BBOX}
             />
 
             <MapLocateControl className="top-auto right-1 bottom-20 left-auto" />
@@ -152,25 +159,9 @@ function MapContent() {
                 <MapMarker
                     key={`start-${startLocation.coordinates[0]}-${startLocation.coordinates[1]}`}
                     position={startLocation.coordinates as LatLngExpression}
+                    icon={<MapPin className="size-8 text-green-500" />}
                 >
-                    <MapPopup>
-                        <div className="text-sm min-w-[200px]">
-                            <div className="flex items-center gap-2 mb-1">
-                                <div className="h-2 w-2 rounded-full bg-green-500" />
-                                <Badge variant="outline" className="text-xs">
-                                    Start
-                                </Badge>
-                            </div>
-                            <div className="font-semibold">
-                                {startLocation.name}
-                            </div>
-                            {startLocation.address && (
-                                <div className="text-xs text-muted-foreground mt-1">
-                                    {startLocation.address}
-                                </div>
-                            )}
-                        </div>
-                    </MapPopup>
+                    <MapTooltip side="top">Start</MapTooltip>
                 </MapMarker>
             )}
 
@@ -179,25 +170,9 @@ function MapContent() {
                 <MapMarker
                     key={`end-${endLocation.coordinates[0]}-${endLocation.coordinates[1]}`}
                     position={endLocation.coordinates as LatLngExpression}
+                    icon={<MapPin className="size-8 text-red-500" />}
                 >
-                    <MapPopup>
-                        <div className="text-sm min-w-[200px]">
-                            <div className="flex items-center gap-2 mb-1">
-                                <div className="h-2 w-2 rounded-full bg-red-500" />
-                                <Badge variant="outline" className="text-xs">
-                                    Destination
-                                </Badge>
-                            </div>
-                            <div className="font-semibold">
-                                {endLocation.name}
-                            </div>
-                            {endLocation.address && (
-                                <div className="text-xs text-muted-foreground mt-1">
-                                    {endLocation.address}
-                                </div>
-                            )}
-                        </div>
-                    </MapPopup>
+                    <MapTooltip side="top">End</MapTooltip>
                 </MapMarker>
             )}
 
@@ -227,39 +202,14 @@ function MapContent() {
                                 weight: 5,
                                 opacity: 0.8,
                             }}
+                            className="fill-none"
                         />
                     );
                 })}
 
-            {/* Temporary Route Line - only show if no calculated routes */}
-            {startLocation && endLocation && routes.length === 0 && (
-                <MapPolyline
-                    positions={[
-                        startLocation.coordinates as LatLngExpression,
-                        endLocation.coordinates as LatLngExpression,
-                    ]}
-                    pathOptions={{
-                        color: "#3b82f6",
-                        weight: 4,
-                        opacity: 0.7,
-                        dashArray: "10, 10",
-                    }}
-                />
-            )}
-
             {/* Calculate Route Button */}
             {startLocation && endLocation && (
-                <div
-                    className="leaflet-control"
-                    style={{
-                        position: "absolute",
-                        top: "90px",
-                        left: "15%",
-                        transform: "translateX(-50%)",
-                        zIndex: 1000,
-                        pointerEvents: "auto",
-                    }}
-                >
+                <div className="leaflet-control absolute top-24 left-1 z-1000 pointer-events-auto">
                     <Button
                         className="shadow-2xl"
                         size="lg"
@@ -271,12 +221,116 @@ function MapContent() {
                     </Button>
                 </div>
             )}
+
+            {/* Swipe-up Panel for Route Instructions */}
+            {routes.length > 0 && (
+                <div
+                    ref={panelRef}
+                    className="fixed left-0 right-0 bg-background border-t border-border shadow-2xl transition-transform duration-300 ease-in-out z-2000 pointer-events-auto bottom-0"
+                    style={{
+                        maxHeight: "70vh",
+                        transform: isPanelOpen ? "translateY(0)" : "translateY(calc(100% - 60px))"
+                    }}
+                >
+                    {/* Panel Header */}
+                    <div
+                        className="flex items-center justify-between p-4 cursor-pointer border-b"
+                        onClick={() => setIsPanelOpen(!isPanelOpen)}
+                    >
+                        <div className="flex items-center gap-2">
+                            <RouteIcon className="h-5 w-5" />
+                            <h3 className="font-semibold">
+                                {routes.length} Route{routes.length > 1 ? "s" : ""} Found
+                            </h3>
+                        </div>
+                        {isPanelOpen ? (
+                            <ChevronDown className="h-5 w-5" />
+                        ) : (
+                            <ChevronUp className="h-5 w-5" />
+                        )}
+                    </div>
+
+                    {/* Panel Content */}
+                    <div className="overflow-y-auto" style={{ maxHeight: "calc(70vh - 60px)" }}>
+                        {/* Route Tabs */}
+                        <div className="flex gap-2 p-4 border-b overflow-x-auto">
+                            {routes.map((routeData, index) => {
+                                const summary = routeData.route?.properties?.summary;
+                                const distance = summary?.distance || 0;
+                                const duration = summary?.duration || 0;
+                                const colors = ["border-green-500 bg-green-50 dark:bg-green-950", "border-blue-500 bg-blue-50 dark:bg-blue-950", "border-orange-500 bg-orange-50 dark:bg-orange-950"];
+                                const colorClass = colors[index] || "border-gray-500 bg-gray-50 dark:bg-gray-950";
+
+                                return (
+                                    <button
+                                        key={index}
+                                        onClick={() => setSelectedRouteIndex(index)}
+                                        className={`shrink-0 px-4 py-3 rounded-lg border-2 transition-all ${
+                                            selectedRouteIndex === index
+                                                ? colorClass
+                                                : "border-border bg-muted"
+                                        }`}
+                                    >
+                                        <div className="text-xs font-medium mb-1">
+                                            Route {index + 1}
+                                        </div>
+                                        <div className="flex items-center gap-3 text-xs">
+                                            <span className="flex items-center gap-1">
+                                                <Clock className="h-3 w-3" />
+                                                {Math.round(duration / 60)} min
+                                            </span>
+                                            <span>{Math.round(distance)} m</span>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground mt-1">
+                                            Crowdedness: {routeData.penalty_score.toFixed(0)}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* Turn-by-turn Instructions */}
+                        <div className="p-4">
+                            {routes[selectedRouteIndex]?.route?.properties?.segments?.[0]?.steps?.map(
+                                (step: any, stepIndex: number) => (
+                                    <div
+                                        key={stepIndex}
+                                        className="flex gap-3 mb-4 last:mb-0"
+                                    >
+                                        <div className="flex flex-col items-center">
+                                            <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">
+                                                {stepIndex + 1}
+                                            </div>
+                                            {stepIndex < routes[selectedRouteIndex].route.properties.segments[0].steps.length - 1 && (
+                                                <div className="w-0.5 h-full bg-border mt-1" />
+                                            )}
+                                        </div>
+                                        <div className="flex-1 pb-2">
+                                            <p className="font-medium">
+                                                {step.instruction}
+                                            </p>
+                                            {step.name && step.name !== "-" && (
+                                                <p className="text-sm text-muted-foreground">
+                                                    on {step.name}
+                                                </p>
+                                            )}
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                {Math.round(step.distance)} m • {Math.round(step.duration / 60)} min
+                                            </p>
+                                        </div>
+                                    </div>
+                                )
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 }
 
 export function WayfindingMap({
-    center = [1.290665504, 103.772663576],
+    center = [1.2959854, 103.7766606],
     zoom = 16,
 }: WayfindingMapProps) {
     const { theme, setTheme } = useTheme();

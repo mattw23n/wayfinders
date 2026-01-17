@@ -2,15 +2,59 @@ from typing import Union
 import httpx
 import os
 import dotenv
+import asyncio
+from langchain_anthropic import ChatAnthropic
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+
+
 dotenv.load_dotenv()
 
 from models import RouteRequest
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from service.mongo import MongoAPIClient
-
 from datetime import datetime
 
+# --- LangChain Setup ---
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+llm = None
+explanation_chain = None
+
+if ANTHROPIC_API_KEY:
+    # Initialize the LangChain model with Claude
+    llm = ChatAnthropic(
+        model="claude-3-5-sonnet-20241022",
+        anthropic_api_key=ANTHROPIC_API_KEY,
+        temperature=0
+    )
+
+    # Create a prompt template
+    prompt_template = ChatPromptTemplate.from_template(
+        """
+        You are explaining a single pedestrian route option to a user.
+        The user is choosing between {num_options} options.
+        The most important factor is the 'penalty_score', where lower is better because it means the route is less crowded.
+
+        This specific route has the following characteristics:
+        - Duration: {duration_minutes} minutes
+        - Distance: {distance_meters} meters
+        - Crowdedness Score (lower is better): {penalty_score}
+
+        It is the recommended route: {is_recommended}.
+
+        Please provide a very short, one-sentence explanation for this specific route.
+        - If it is the recommended route, start with "Best choice:" and explain why (e.g., "it's the least crowded path").
+        - If it is NOT the recommended route, explain its trade-off (e.g., "A bit faster, but goes through busier areas.").
+        - Be encouraging and friendly. Avoid technical jargon.
+        """
+    )
+
+    # Create a chain by piping the prompt to the model
+    explanation_chain = prompt_template | llm | StrOutputParser()
+
+# --- FastAPI App ---
 app = FastAPI()
 
 # Configure CORS
@@ -26,6 +70,35 @@ mongo = MongoAPIClient()
 ORS_BASE_URL = os.getenv("ORS_BASE_URL")
 ORS_API_KEY = os.getenv("ORS_API_KEY")
 
+
+async def get_explanation_for_route(route_data: dict, all_routes: list) -> str:
+    """
+    Uses a LangChain chain to create a human-readable explanation for a single route.
+    """
+    if not explanation_chain:
+        return "LLM explanation not available: ANTHROPIC_API_KEY not configured."
+
+    try:
+        # Simplify the data for the prompt
+        current_route_summary = route_data.get("route", {}).get("properties", {}).get("summary", {})
+
+        prompt_input = {
+            "num_options": len(all_routes),
+            "duration_minutes": round(current_route_summary.get("duration", 0) / 60, 1),
+            "distance_meters": round(current_route_summary.get("distance", 0)),
+            "penalty_score": round(route_data.get("penalty_score", 0)),
+            "is_recommended": "Yes" if route_data == all_routes[0] else "No"
+        }
+
+        # Asynchronously invoke the chain
+        response = await explanation_chain.ainvoke(prompt_input)
+        return response.strip()
+
+    except Exception as e:
+        print(f"Error calling LangChain chain for a route: {e}")
+        return "Could not generate an explanation for this route due to an error."
+
+
 @app.post("/routes/")
 async def get_routes(request: RouteRequest):
     if not ORS_API_KEY:
@@ -36,18 +109,8 @@ async def get_routes(request: RouteRequest):
         [request.start.longitude, request.start.latitude],
         [request.end.longitude, request.end.latitude]
     ]
-    
-    # Prepare request payload
-    payload = {
-        "coordinates": coordinates,
-        "alternative_routes": {
-            "target_count": 3,
-            "weight_factor": 1.5,
-            "share_factor": 0.6
-        }
-    }
-    
-    # Call OpenRouteService API
+    payload = {"coordinates": coordinates, "alternative_routes": {"target_count": 3, "weight_factor": 1.5, "share_factor": 0.6}}
+
     api_response = await call_ors_api(payload)
 
     # Extract routes from response
@@ -56,10 +119,18 @@ async def get_routes(request: RouteRequest):
     # Process routes (all your business logic here)
     processed_routes = await process_routes(routes)
 
-    return {
-        "routes": processed_routes,
-        "raw_response": api_response
-    }
+    # Concurrently generate an explanation for each route using LangChain
+    if processed_routes and explanation_chain:
+        explanation_tasks = [get_explanation_for_route(route, processed_routes) for route in processed_routes]
+        explanations = await asyncio.gather(*explanation_tasks)
+
+        for route, explanation in zip(processed_routes, explanations):
+            route["explanation"] = explanation
+    else:
+        for route in processed_routes:
+            route["explanation"] = "Explanation not available."
+
+    return {"routes": processed_routes, "raw_ors_response": api_response}
 
 async def call_ors_api(payload: dict) -> dict:
     """Call OpenRouteService API and return response"""
@@ -68,10 +139,7 @@ async def call_ors_api(payload: dict) -> dict:
             response = await client.post(
                 f"{ORS_BASE_URL}/v2/directions/foot-walking/geojson",
                 json=payload,
-                headers={
-                    "Content-Type": "application/json; charset=utf-8",
-                    "Authorization": ORS_API_KEY
-                },
+                headers={"Content-Type": "application/json; charset=utf-8", "Authorization": ORS_API_KEY},
                 timeout=30.0
             )
             response.raise_for_status()
@@ -82,25 +150,19 @@ async def call_ors_api(payload: dict) -> dict:
 async def process_routes(routes: list) -> list:
     """Process and enrich routes with venue information"""
     processed = []
-    current_time = datetime.now()
-    # today = current_time.strftime("%A")
-    today = "Monday"
 
     for route in routes:
         # Extract coordinates from route
         coordinates = route.get("geometry", {}).get("coordinates", [])
 
-        # Check each coordinate against venues and collect results
-        nearby_venues = []
-        async for venue in check_venues_along_route(coordinates):
-            nearby_venues.append(venue)
+        # Check each coordinate against venues
+        nearby_venues = await check_venues_along_route(coordinates)
 
         # Calculate penalties
         classes_by_venue = await load_classes_by_venue(nearby_venues, today)
         penalty_score = calculate_penalty(
             nearby_venues,
             classes_by_venue,
-            current_time,
         )
 
         processed.append({
@@ -118,6 +180,7 @@ async def process_routes(routes: list) -> list:
 async def check_venues_along_route(coordinates: list):
     """Check which venues are near the route coordinates using MongoDB geospatial queries"""
     seen_venue_ids = set()  # Track venues we've already found to avoid duplicates
+    nearby_venues = []
 
     for coord in coordinates:
         # coord is [longitude, latitude] format from OpenRouteService
@@ -132,7 +195,7 @@ async def check_venues_along_route(coordinates: list):
             50,
         )
 
-        # Yield unique venues with calculated distance
+        # Add unique venues with calculated distance
         for venue in venues:
             venue_id = venue.get('_id')
 
@@ -155,12 +218,14 @@ async def check_venues_along_route(coordinates: list):
                     'distance': distance
                 }
 
-def calculate_penalty(venues: list, classes_by_venue: dict, current_time: datetime) -> float:
+def calculate_penalty(venues: list, classes_by_venue: dict) -> float:
     """Calculate penalty score based on venue classes"""
     if not venues:
         return 0.0
     
     total_penalty = 0.0
+    current_time = datetime.now()
+    today = current_time.strftime("%A")
     
     for venue_data in venues:
         distance = venue_data['distance']
