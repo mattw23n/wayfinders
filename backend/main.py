@@ -105,22 +105,15 @@ async def get_routes(request: RouteRequest):
     
     api_response = await call_ors_api(payload)
     routes = api_response.get("features", [])
-    processed_routes = process_routes(routes)
     
-    # Concurrently generate an explanation for each route using LangChain
-    if processed_routes and explanation_chain:
-        explanation_tasks = [get_explanation_for_route(route, processed_routes) for route in processed_routes]
-        explanations = await asyncio.gather(*explanation_tasks)
-        
-        for route, explanation in zip(processed_routes, explanations):
-            route["explanation"] = explanation
-    else:
-        for route in processed_routes:
-            route["explanation"] = "Explanation not available."
+    # Process routes (all your business logic here)
+    processed_routes = await process_routes(routes)
 
-    return {"routes": processed_routes, "raw_ors_response": api_response}
+    return {
+        "routes": processed_routes,
+        "raw_ors_response": api_response
+    }
 
-    
 async def call_ors_api(payload: dict) -> dict:
     """Call OpenRouteService API and return response"""
     async with httpx.AsyncClient() as client:
@@ -139,42 +132,43 @@ async def call_ors_api(payload: dict) -> dict:
         except httpx.HTTPError as e:
             raise HTTPException(status_code=500, detail=f"Error calling ORS API: {str(e)}")
 
-def process_routes(routes: list) -> list:
+async def process_routes(routes: list) -> list:
     """Process and enrich routes with venue information"""
     processed = []
-    
+
     for route in routes:
         # Extract coordinates from route
         coordinates = route.get("geometry", {}).get("coordinates", [])
-        
-        # Check each coordinate against venues
-        nearby_venues = check_venues_along_route(coordinates)
-        
+
+        # Check each coordinate against venues and collect results
+        nearby_venues = []
+        async for venue in check_venues_along_route(coordinates):
+            nearby_venues.append(venue)
+
         # Calculate penalties
         penalty_score = calculate_penalty(nearby_venues)
-        
+
         processed.append({
             "route": route,
             "nearby_venues": nearby_venues,
             "penalty_score": penalty_score
         })
-    
+
     # Sort by penalty score (lower is better)
     processed.sort(key=lambda x: x["penalty_score"])
-    
+
     return processed
 
 
-def check_venues_along_route(coordinates: list) -> list:
+async def check_venues_along_route(coordinates: list):
     """Check which venues are near the route coordinates using MongoDB geospatial queries"""
-    nearby_venues = []
     seen_venue_ids = set()  # Track venues we've already found to avoid duplicates
-    
+
     for coord in coordinates:
         # coord is [longitude, latitude] format from OpenRouteService
         longitude = coord[0]
         latitude = coord[1]
-        
+
         # Query MongoDB for venues within 50m of this coordinate
         venues = mongo.find_venues_near(
             collection_name='venues',
@@ -182,15 +176,15 @@ def check_venues_along_route(coordinates: list) -> list:
             latitude=latitude,
             max_distance_meters=50
         )
-        
-        # Add unique venues to results with calculated distance
+
+        # Yield unique venues with calculated distance
         for venue in venues:
             venue_id = venue.get('_id')
-            
+
             # Skip if we've already added this venue
             if venue_id not in seen_venue_ids:
                 seen_venue_ids.add(venue_id)
-                
+
                 # Calculate actual distance between coordinate and venue
                 venue_coords = venue.get('location', {}).get('coordinates', [])
                 if venue_coords:
@@ -199,14 +193,12 @@ def check_venues_along_route(coordinates: list) -> list:
                     distance = calculate_distance(latitude, longitude, venue_lat, venue_lon)
                 else:
                     distance = 0  # Fallback if location data is missing
-                
-                nearby_venues.append({
+
+                yield {
                     'venue': venue,
                     '_id': venue_id,
                     'distance': distance
-                })
-    
-    return nearby_venues
+                }
 
 def calculate_penalty(venues: list) -> float:
     """Calculate penalty score based on venue classes"""
@@ -242,7 +234,6 @@ def calculate_penalty(venues: list) -> float:
                 total_penalty += penalty
     
     return total_penalty
-
 
 def is_class_critical_time(class_entry: dict, current_time: datetime) -> bool:
     """
@@ -327,4 +318,119 @@ def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     return round(distance, 2)
 
 # TODO: Create get endpoint to see all venues and their current statuses (ongoing class or no) to visualize with a map
-
+@app.get("/venues/status")
+async def get_venues_status():
+    """
+    Get all venues with their current class status
+    Returns venues with information about ongoing or upcoming classes
+    """
+    try:
+        current_time = datetime.now()
+        today = current_time.strftime("%A")
+        
+        # Calculate time window (current time ± 15 minutes)
+        current_minutes = current_time.hour * 60 + current_time.minute
+        start_window = current_minutes - 15
+        end_window = current_minutes + 15
+        
+        # Convert to "HHMM" format strings for comparison
+        def minutes_to_hhmm(minutes):
+            hours = minutes // 60
+            mins = minutes % 60
+            return f"{hours:02d}{mins:02d}"
+        
+        # Use aggregation pipeline for efficient processing
+        pipeline = [
+            {
+                '$lookup': {
+                    'from': 'classes',
+                    'let': {'venue_id': '$_id'},
+                    'pipeline': [
+                        {
+                            '$match': {
+                                '$expr': {
+                                    '$and': [
+                                        {'$eq': ['$venueId', '$$venue_id']},
+                                        {'$eq': ['$day', today]}
+                                    ]
+                                }
+                            }
+                        }
+                    ],
+                    'as': 'todayClasses'
+                }
+            },
+            {
+                '$addFields': {
+                    'criticalClasses': {
+                        '$filter': {
+                            'input': '$todayClasses',
+                            'as': 'class',
+                            'cond': {
+                                '$or': [
+                                    # Check if within 15 min of start
+                                    {
+                                        '$and': [
+                                            {'$gte': ['$$class.startTime', minutes_to_hhmm(max(0, start_window))]},
+                                            {'$lte': ['$$class.startTime', minutes_to_hhmm(min(1439, end_window))]}
+                                        ]
+                                    },
+                                    # Check if within 15 min of end
+                                    {
+                                        '$and': [
+                                            {'$gte': ['$$class.endTime', minutes_to_hhmm(max(0, start_window))]},
+                                            {'$lte': ['$$class.endTime', minutes_to_hhmm(min(1439, end_window))]}
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                '$addFields': {
+                    'hasCriticalClass': {'$gt': [{'$size': '$criticalClasses'}, 0]}
+                }
+            },
+            # Filter to only include venues with critical classes
+            {
+                '$match': {
+                    'hasCriticalClass': True
+                }
+            },
+            {
+                '$project': {
+                    '_id': {'$toString': '$_id'},
+                    'roomName': 1,
+                    'location': 1,
+                    'latitude': {'$arrayElemAt': ['$location.coordinates', 1]},
+                    'longitude': {'$arrayElemAt': ['$location.coordinates', 0]},
+                    'criticalClasses': {
+                        '$map': {
+                            'input': '$criticalClasses',
+                            'as': 'class',
+                            'in': {
+                                'class_id': {'$toString': '$$class._id'},
+                                'startTime': '$$class.startTime',
+                                'endTime': '$$class.endTime',
+                                'size': '$$class.size',
+                                'name': {'$ifNull': ['$$class.name', 'Unknown Class']}
+                            }
+                        }
+                    }
+                }
+            }
+        ]
+        
+        critical_venues = list(mongo.get_collection('venues').aggregate(pipeline))
+        
+        return {
+            'total_critical_venues': len(critical_venues),
+            'current_time': current_time.isoformat(),
+            'day': today,
+            'venues': critical_venues
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching venues: {str(e)}")
