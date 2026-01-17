@@ -27,7 +27,9 @@ if ANTHROPIC_API_KEY:
     llm = ChatAnthropic(
         model="claude-3-5-sonnet-20241022",
         anthropic_api_key=ANTHROPIC_API_KEY,
-        temperature=0
+        temperature=0,
+        max_retries=2,  # Add retry logic
+        timeout=10.0,   # Add timeout to prevent hanging
     )
 
     # Create a prompt template
@@ -90,10 +92,16 @@ async def get_explanation_for_route(route_data: dict, all_routes: list) -> str:
             "is_recommended": "Yes" if route_data == all_routes[0] else "No"
         }
 
-        # Asynchronously invoke the chain
-        response = await explanation_chain.ainvoke(prompt_input)
+        # Wrap in asyncio.create_task to ensure true parallelism
+        response = await asyncio.wait_for(
+            explanation_chain.ainvoke(prompt_input),
+            timeout=15.0  # 15 second timeout per route
+        )
         return response.strip()
 
+    except asyncio.TimeoutError:
+        print(f"Timeout generating explanation for route")
+        return "Route explanation timed out."
     except Exception as e:
         print(f"Error calling LangChain chain for a route: {e}")
         return "Could not generate an explanation for this route due to an error."
@@ -107,22 +115,43 @@ async def get_routes(request: RouteRequest):
     coordinates = [[request.start.longitude, request.start.latitude], [request.end.longitude, request.end.latitude]]
     payload = {"coordinates": coordinates, "alternative_routes": {"target_count": 3, "weight_factor": 1.5, "share_factor": 0.6}}
     
+    # Time the ORS API call
+    start_time = datetime.now()
     api_response = await call_ors_api(payload)
+    print(f"ORS API call took: {(datetime.now() - start_time).total_seconds():.2f}s")
+    
     routes = api_response.get("features", [])
     
-    # Process routes (all your business logic here)
+    # Time the route processing
+    start_time = datetime.now()
     processed_routes = await process_routes(routes)
+    print(f"Route processing took: {(datetime.now() - start_time).total_seconds():.2f}s")
     
-    # Concurrently generate an explanation for each route using LangChain
+    # Time the LLM explanation generation
+    start_time = datetime.now()
+    # Concurrently generate explanations for all routes using LangChain
     if processed_routes and explanation_chain:
-        explanation_tasks = [get_explanation_for_route(route, processed_routes) for route in processed_routes]
-        explanations = await asyncio.gather(*explanation_tasks)
+        # Create all tasks upfront
+        explanation_tasks = [
+            get_explanation_for_route(route, processed_routes) 
+            for route in processed_routes
+        ]
         
+        # Run all explanations in parallel with gather
+        explanations = await asyncio.gather(*explanation_tasks, return_exceptions=True)
+        
+        # Handle results
         for route, explanation in zip(processed_routes, explanations):
-            route["explanation"] = explanation
+            if isinstance(explanation, Exception):
+                route["explanation"] = "Explanation generation failed."
+                print(f"Exception generating explanation: {explanation}")
+            else:
+                route["explanation"] = explanation
     else:
         for route in processed_routes:
             route["explanation"] = "Explanation not available."
+    
+    print(f"LLM explanation generation took: {(datetime.now() - start_time).total_seconds():.2f}s")
 
     return {"routes": processed_routes, "raw_ors_response": api_response}
     
