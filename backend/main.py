@@ -107,13 +107,21 @@ async def get_routes(request: RouteRequest):
     routes = api_response.get("features", [])
     
     # Process routes (all your business logic here)
-    processed_routes = await process_routes(routes)
+    processed_routes = process_routes(routes)
+    
+    # Concurrently generate an explanation for each route using LangChain
+    if processed_routes and explanation_chain:
+        explanation_tasks = [get_explanation_for_route(route, processed_routes) for route in processed_routes]
+        explanations = await asyncio.gather(*explanation_tasks)
+        
+        for route, explanation in zip(processed_routes, explanations):
+            route["explanation"] = explanation
+    else:
+        for route in processed_routes:
+            route["explanation"] = "Explanation not available."
 
-    return {
-        "routes": processed_routes,
-        "raw_ors_response": api_response
-    }
-
+    return {"routes": processed_routes, "raw_ors_response": api_response}
+    
 async def call_ors_api(payload: dict) -> dict:
     """Call OpenRouteService API and return response"""
     async with httpx.AsyncClient() as client:
@@ -121,10 +129,7 @@ async def call_ors_api(payload: dict) -> dict:
             response = await client.post(
                 f"{ORS_BASE_URL}/v2/directions/foot-walking/geojson",
                 json=payload,
-                headers={
-                    "Content-Type": "application/json; charset=utf-8",
-                    "Authorization": ORS_API_KEY
-                },
+                headers={"Content-Type": "application/json; charset=utf-8", "Authorization": ORS_API_KEY},
                 timeout=30.0
             )
             response.raise_for_status()
@@ -132,31 +137,29 @@ async def call_ors_api(payload: dict) -> dict:
         except httpx.HTTPError as e:
             raise HTTPException(status_code=500, detail=f"Error calling ORS API: {str(e)}")
 
-async def process_routes(routes: list) -> list:
+def process_routes(routes: list) -> list:
     """Process and enrich routes with venue information"""
     processed = []
-
+    
     for route in routes:
         # Extract coordinates from route
         coordinates = route.get("geometry", {}).get("coordinates", [])
-
-        # Check each coordinate against venues and collect results
-        nearby_venues = []
-        async for venue in check_venues_along_route(coordinates):
-            nearby_venues.append(venue)
-
+        
+        # Check each coordinate against venues
+        nearby_venues = check_venues_along_route(coordinates)
+        
         # Calculate penalties
         penalty_score = calculate_penalty(nearby_venues)
-
+        
         processed.append({
             "route": route,
             "nearby_venues": nearby_venues,
             "penalty_score": penalty_score
         })
-
+    
     # Sort by penalty score (lower is better)
     processed.sort(key=lambda x: x["penalty_score"])
-
+    
     return processed
 
 
