@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/map";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Navigation } from "lucide-react";
+import { Navigation, MapPin } from "lucide-react";
 import { useTheme } from "next-themes";
 import type { LatLngExpression } from "leaflet";
 import type { PlaceFeature } from "@/components/ui/place-autocomplete";
@@ -152,6 +152,7 @@ function MapContent() {
                 <MapMarker
                     key={`start-${startLocation.coordinates[0]}-${startLocation.coordinates[1]}`}
                     position={startLocation.coordinates as LatLngExpression}
+                    icon={<MapPin className="size-8 text-green-500" />}
                 >
                     <MapPopup>
                         <div className="text-sm min-w-[200px]">
@@ -179,6 +180,7 @@ function MapContent() {
                 <MapMarker
                     key={`end-${endLocation.coordinates[0]}-${endLocation.coordinates[1]}`}
                     position={endLocation.coordinates as LatLngExpression}
+                    icon={<MapPin className="size-8 text-red-500" />}
                 >
                     <MapPopup>
                         <div className="text-sm min-w-[200px]">
@@ -276,7 +278,7 @@ function MapContent() {
 }
 
 export function WayfindingMap({
-    center = [1.290665504, 103.772663576],
+    center = [1.2959854, 103.7766606],
     zoom = 16,
 }: WayfindingMapProps) {
     const { theme, setTheme } = useTheme();
