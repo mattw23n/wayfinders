@@ -224,7 +224,7 @@ function MapContent() {
         <>
             {/* First Search Control - START */}
             <MapSearchControl
-                className="top-1 left-1 z-9999"
+                className="top-4 left-4 z-9999"
                 placeholder="Search start location..."
                 onPlaceSelect={handleStartSelect}
                 bbox={SINGAPORE_BBOX}
@@ -232,7 +232,7 @@ function MapContent() {
 
             {/* Second Search Control - END */}
             <MapSearchControl
-                className="top-12 left-1"
+                className="top-15 left-4"
                 placeholder="Search destination..."
                 onPlaceSelect={handleEndSelect}
                 bbox={SINGAPORE_BBOX}
@@ -307,8 +307,8 @@ function MapContent() {
                 </div>
             )}
 
-            <MapLocateControl className="top-auto right-1 bottom-20 left-auto" />
-            <MapZoomControl className="top-auto right-1 bottom-30 left-auto" />
+            <MapLocateControl className="top-auto right-4 bottom-18 left-auto" />
+            <MapZoomControl className="top-auto right-4 bottom-28 left-auto" />
 
             {/* Start Location Marker - GREEN */}
             {startLocation && (
@@ -456,7 +456,7 @@ function MapContent() {
                 })}
 
             {/* Calculate Route Button */}
-            <div className="absolute top-24 left-1 z-1000">
+            <div className="absolute top-26 left-4 z-1000">
                 <Button
                     className={!startLocation || !endLocation ? "bg-gray-300" : "bg-white"}
                     size="lg"
@@ -657,7 +657,7 @@ export function WayfindingMap({
         <div className="relative w-full h-screen">
             <Map center={center} zoom={zoom} className="w-full h-full">
                 <MapLayers defaultTileLayer="Light">
-                    <MapLayersControl className="top-auto right-auto left-1 bottom-20" />
+                    <MapLayersControl className="top-auto right-4 left-auto bottom-8" />
 
                     <MapTileLayer
                         name="Streets"
