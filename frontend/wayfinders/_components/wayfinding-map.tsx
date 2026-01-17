@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import type { LatLngExpression } from "leaflet";
-import L from "leaflet";
+// import L from "leaflet";
 import type { PlaceFeature } from "@/components/ui/place-autocomplete";
 import { useMap } from "react-leaflet";
 
@@ -84,9 +84,12 @@ function MapContent() {
     const panelRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        if (panelRef.current) {
-            L.DomEvent.disableScrollPropagation(panelRef.current);
-            L.DomEvent.disableClickPropagation(panelRef.current);
+        // Import L dynamically only on client side
+        if (panelRef.current && typeof window !== "undefined") {
+            import("leaflet").then((L) => {
+                L.DomEvent.disableScrollPropagation(panelRef.current!);
+                L.DomEvent.disableClickPropagation(panelRef.current!);
+            });
         }
     }, [routes]);
 
