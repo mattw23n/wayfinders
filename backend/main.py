@@ -104,7 +104,6 @@ def process_routes(routes: list) -> list:
     
     return processed
 
-
 def check_venues_along_route(coordinates: list) -> list:
     """Check which venues are near the route coordinates using MongoDB geospatial queries"""
     nearby_venues = []
@@ -182,7 +181,6 @@ def calculate_penalty(venues: list) -> float:
                 total_penalty += penalty
     
     return total_penalty
-
 
 def is_class_critical_time(class_entry: dict, current_time: datetime) -> bool:
     """
@@ -267,4 +265,119 @@ def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     return round(distance, 2)
 
 # TODO: Create get endpoint to see all venues and their current statuses (ongoing class or no) to visualize with a map
-
+@app.get("/venues/status")
+async def get_venues_status():
+    """
+    Get all venues with their current class status
+    Returns venues with information about ongoing or upcoming classes
+    """
+    try:
+        current_time = datetime.now()
+        today = current_time.strftime("%A")
+        
+        # Calculate time window (current time ± 15 minutes)
+        current_minutes = current_time.hour * 60 + current_time.minute
+        start_window = current_minutes - 15
+        end_window = current_minutes + 15
+        
+        # Convert to "HHMM" format strings for comparison
+        def minutes_to_hhmm(minutes):
+            hours = minutes // 60
+            mins = minutes % 60
+            return f"{hours:02d}{mins:02d}"
+        
+        # Use aggregation pipeline for efficient processing
+        pipeline = [
+            {
+                '$lookup': {
+                    'from': 'classes',
+                    'let': {'venue_id': '$_id'},
+                    'pipeline': [
+                        {
+                            '$match': {
+                                '$expr': {
+                                    '$and': [
+                                        {'$eq': ['$venueId', '$$venue_id']},
+                                        {'$eq': ['$day', today]}
+                                    ]
+                                }
+                            }
+                        }
+                    ],
+                    'as': 'todayClasses'
+                }
+            },
+            {
+                '$addFields': {
+                    'criticalClasses': {
+                        '$filter': {
+                            'input': '$todayClasses',
+                            'as': 'class',
+                            'cond': {
+                                '$or': [
+                                    # Check if within 15 min of start
+                                    {
+                                        '$and': [
+                                            {'$gte': ['$$class.startTime', minutes_to_hhmm(max(0, start_window))]},
+                                            {'$lte': ['$$class.startTime', minutes_to_hhmm(min(1439, end_window))]}
+                                        ]
+                                    },
+                                    # Check if within 15 min of end
+                                    {
+                                        '$and': [
+                                            {'$gte': ['$$class.endTime', minutes_to_hhmm(max(0, start_window))]},
+                                            {'$lte': ['$$class.endTime', minutes_to_hhmm(min(1439, end_window))]}
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                '$addFields': {
+                    'hasCriticalClass': {'$gt': [{'$size': '$criticalClasses'}, 0]}
+                }
+            },
+            # Filter to only include venues with critical classes
+            {
+                '$match': {
+                    'hasCriticalClass': True
+                }
+            },
+            {
+                '$project': {
+                    '_id': {'$toString': '$_id'},
+                    'roomName': 1,
+                    'location': 1,
+                    'latitude': {'$arrayElemAt': ['$location.coordinates', 1]},
+                    'longitude': {'$arrayElemAt': ['$location.coordinates', 0]},
+                    'criticalClasses': {
+                        '$map': {
+                            'input': '$criticalClasses',
+                            'as': 'class',
+                            'in': {
+                                'class_id': {'$toString': '$$class._id'},
+                                'startTime': '$$class.startTime',
+                                'endTime': '$$class.endTime',
+                                'size': '$$class.size',
+                                'name': {'$ifNull': ['$$class.name', 'Unknown Class']}
+                            }
+                        }
+                    }
+                }
+            }
+        ]
+        
+        critical_venues = list(mongo.get_collection('venues').aggregate(pipeline))
+        
+        return {
+            'total_critical_venues': len(critical_venues),
+            'current_time': current_time.isoformat(),
+            'day': today,
+            'venues': critical_venues
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching venues: {str(e)}")
