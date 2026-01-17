@@ -254,8 +254,7 @@ def calculate_penalty(venues: list, classes_by_venue: dict) -> float:
         return 0.0
     
     total_penalty = 0.0
-    current_time = datetime.now()
-    today = current_time.strftime("%A")
+    current_time = datetime(2026, 1, 19, 11, 50)
     
     for venue_data in venues:
         distance = venue_data['distance']
@@ -394,7 +393,7 @@ async def get_venues_status():
     Returns venues with information about ongoing or upcoming classes
     """
     try:
-        current_time = datetime.now()
+        current_time = datetime(2026, 1, 19, 11, 50)
         today = current_time.strftime("%A")
         
         # Calculate time window (current time ± 15 minutes)

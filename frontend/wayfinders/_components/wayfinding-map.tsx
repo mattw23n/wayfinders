@@ -21,6 +21,7 @@ import {
     ChevronDown,
     Clock,
     Route as RouteIcon,
+    AlertTriangle,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import type { LatLngExpression } from "leaflet";
@@ -46,6 +47,20 @@ interface RouteData {
     explanation: string;
 }
 
+interface VenueStatus {
+    _id: string;
+    roomName: string;
+    latitude: number;
+    longitude: number;
+    criticalClasses: Array<{
+        class_id: string;
+        startTime: string;
+        endTime: string;
+        size: number;
+        name: string;
+    }>;
+}
+
 // Singapore bounding box: [minLon, minLat, maxLon, maxLat]
 const SINGAPORE_BBOX: [number, number, number, number] = [
     103.6, 1.15, 104.1, 1.47,
@@ -59,6 +74,7 @@ function MapContent() {
     const [loading, setLoading] = useState(false);
     const [isPanelOpen, setIsPanelOpen] = useState(false);
     const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
+    const [crowdedVenues, setCrowdedVenues] = useState<VenueStatus[]>([]);
     const panelRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -67,6 +83,29 @@ function MapContent() {
             L.DomEvent.disableClickPropagation(panelRef.current);
         }
     }, [routes]);
+
+    // Fetch crowded venues on mount
+    useEffect(() => {
+        const fetchCrowdedVenues = async () => {
+            try {
+                const response = await fetch(
+                    "http://127.0.0.1:8000/venues/status",
+                );
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log(data);
+                    setCrowdedVenues(data.venues || []);
+                }
+            } catch (error) {
+                console.error("Error fetching crowded venues:", error);
+            }
+        };
+
+        fetchCrowdedVenues();
+        // Refresh every 5 minutes
+        const interval = setInterval(fetchCrowdedVenues, 5 * 60 * 1000);
+        return () => clearInterval(interval);
+    }, []);
 
     const handleStartSelect = (feature: PlaceFeature) => {
         console.log("Start selected - full feature:", feature);
@@ -187,6 +226,62 @@ function MapContent() {
                     <MapTooltip side="top">End</MapTooltip>
                 </MapMarker>
             )}
+
+            {/* Crowded Venues Heatmap */}
+            {crowdedVenues.map((venue) => {
+                const totalClassSize = venue.criticalClasses.reduce(
+                    (sum, cls) => sum + cls.size,
+                    0,
+                );
+                // Determine marker size and color based on crowd level
+                const crowdLevel =
+                    totalClassSize < 50
+                        ? "low"
+                        : totalClassSize < 150
+                          ? "medium"
+                          : "high";
+                const sizeClass =
+                    crowdLevel === "low"
+                        ? "size-6"
+                        : crowdLevel === "medium"
+                          ? "size-8"
+                          : "size-10";
+                const colorClass =
+                    crowdLevel === "low"
+                        ? "text-yellow-500 fill-yellow-500"
+                        : crowdLevel === "medium"
+                          ? "text-orange-500 fill-orange-500"
+                          : "text-red-600 fill-red-600";
+
+                return (
+                    <MapMarker
+                        key={`venue-${venue._id}`}
+                        position={[venue.latitude, venue.longitude]}
+                        icon={
+                            <AlertTriangle
+                                className={`${sizeClass} ${colorClass} opacity-70`}
+                            />
+                        }
+                    >
+                        <MapTooltip side="top">
+                            <div className="text-xs">
+                                <div className="font-semibold">
+                                    {venue.roomName}
+                                </div>
+                                <div className="text-muted-foreground mt-1">
+                                    {venue.criticalClasses.length} active{" "}
+                                    {venue.criticalClasses.length === 1
+                                        ? "class"
+                                        : "classes"}
+                                </div>
+                                <div className="text-muted-foreground">
+                                    ~{totalClassSize} people
+                                </div>
+                            </div>
+                        </MapTooltip>
+                    </MapMarker>
+                );
+            })}
 
             {/* Route Lines from API */}
             {routes.length > 0 &&
