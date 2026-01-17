@@ -127,7 +127,10 @@ function MapContent() {
 
         console.log("Start location created:", location);
         setStartLocation(location);
-        map.panTo(location.coordinates);
+        map.flyTo(location.coordinates, map.getZoom(), {
+            duration: 1,
+            easeLinearity: 0.5
+        });
     };
 
     const handleEndSelect = (feature: PlaceFeature) => {
@@ -144,7 +147,10 @@ function MapContent() {
 
         console.log("End location created:", location);
         setEndLocation(location);
-        map.panTo(location.coordinates);
+        map.flyTo(location.coordinates, map.getZoom(), {
+            duration: 1,
+            easeLinearity: 0.5
+        });
     };
 
     const handleCalculateRoute = async () => {
@@ -286,6 +292,7 @@ function MapContent() {
                     key={`start-${startLocation.coordinates[0]}-${startLocation.coordinates[1]}`}
                     position={startLocation.coordinates as LatLngExpression}
                     icon={<MapPin className="size-8 text-green-500" />}
+                    zIndexOffset={1000}
                 >
                     <MapTooltip side="top">Start</MapTooltip>
                 </MapMarker>
@@ -297,6 +304,7 @@ function MapContent() {
                     key={`end-${endLocation.coordinates[0]}-${endLocation.coordinates[1]}`}
                     position={endLocation.coordinates as LatLngExpression}
                     icon={<MapPin className="size-8 text-red-500" />}
+                    zIndexOffset={1000}
                 >
                     <MapTooltip side="top">End</MapTooltip>
                 </MapMarker>
