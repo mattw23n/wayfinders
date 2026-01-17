@@ -22,15 +22,21 @@ import {
     ChevronDown,
     Clock,
     Route as RouteIcon,
-    AlertTriangle,
     Settings,
     X,
+    Volume2,
 } from "lucide-react";
+import {
+    useNavigation,
+    type RouteData as NavRouteData,
+} from "@/hooks/use-navigation";
+import { NavigationOverlay } from "@/_components/navigation-overlay";
 import { useTheme } from "next-themes";
 import type { LatLngExpression } from "leaflet";
 // import L from "leaflet";
 import type { PlaceFeature } from "@/components/ui/place-autocomplete";
 import { useMap } from "react-leaflet";
+import type { NearbyVenue, RouteData, RouteStep } from "@/types/route";
 
 interface WayfindingMapProps {
     center?: [number, number];
@@ -43,26 +49,7 @@ interface Location {
     coordinates: [number, number];
 }
 
-interface RouteData {
-    route: any;
-    nearby_venues: any[];
-    penalty_score: number;
-    explanation: string;
-}
-
-interface VenueStatus {
-    _id: string;
-    roomName: string;
-    latitude: number;
-    longitude: number;
-    criticalClasses: Array<{
-        class_id: string;
-        startTime: string;
-        endTime: string;
-        size: number;
-        name: string;
-    }>;
-}
+type VenueStatus = Omit<NearbyVenue, "distance_to_route">;
 
 // Singapore bounding box: [minLon, minLat, maxLon, maxLat]
 const SINGAPORE_BBOX: [number, number, number, number] = [
@@ -82,6 +69,22 @@ function MapContent() {
     const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
     const [crowdedVenues, setCrowdedVenues] = useState<VenueStatus[]>([]);
     const panelRef = useRef<HTMLDivElement>(null);
+
+    // Navigation state
+    const {
+        isNavigating,
+        currentStepIndex,
+        currentStep,
+        totalSteps,
+        distanceToNextWaypoint,
+        userPosition: navUserPosition,
+        accuracy,
+        error: navError,
+        startNavigation,
+        stopNavigation,
+        skipToNextStep,
+        repeatCurrentInstruction,
+    } = useNavigation();
 
     useEffect(() => {
         // Import L dynamically only on client side
@@ -196,19 +199,20 @@ function MapContent() {
             if (data.routes && data.routes.length > 0) {
                 const firstRoute = data.routes[0];
                 const coordinates = firstRoute.route?.geometry?.coordinates || [];
-                
-                if (coordinates.length > 0) {
-                    // Convert coordinates to LatLng format and create bounds
-                    const bounds = L.latLngBounds(
-                        coordinates.map((coord: [number, number]) => [coord[1], coord[0]])
-                    );
-                    
-                    // Fly to bounds with padding
-                    map.flyToBounds(bounds, {
-                        padding: [50, 50],
-                        duration: 0.7,
-                        easeLinearity: 0.5,
-                        maxZoom: 17
+
+                if (coordinates.length > 0 && typeof window !== "undefined") {
+                    import("leaflet").then((L) => {
+                        const bounds = L.latLngBounds(
+                            coordinates.map((coord: [number, number]) => [coord[1], coord[0]])
+                        );
+
+                        // Fly to bounds with padding
+                        map.flyToBounds(bounds, {
+                            padding: [50, 50],
+                            duration: 0.7,
+                            easeLinearity: 0.5,
+                            maxZoom: 17
+                        });
                     });
                 }
             }
@@ -576,6 +580,21 @@ function MapContent() {
                                             Crowdedness:{" "}
                                             {routeData.penalty_score.toFixed(0)}
                                         </div>
+                                        <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            className="mt-2 w-full"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                startNavigation(
+                                                    routeData as NavRouteData,
+                                                );
+                                            }}
+                                            disabled={isNavigating}
+                                        >
+                                            <Volume2 className="h-3 w-3 mr-1" />
+                                            Start Navigation
+                                        </Button>
                                     </button>
                                 );
                             })}
@@ -595,7 +614,7 @@ function MapContent() {
                             {routes[
                                 selectedRouteIndex
                             ]?.route?.properties?.segments?.[0]?.steps?.map(
-                                (step: any, stepIndex: number) => (
+                                (step: RouteStep, stepIndex: number) => (
                                     <div
                                         key={stepIndex}
                                         className="flex gap-3 mb-4 last:mb-0"
@@ -632,6 +651,41 @@ function MapContent() {
                             )}
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Navigation Overlay */}
+            {isNavigating && (
+                <NavigationOverlay
+                    currentStepIndex={currentStepIndex}
+                    totalSteps={totalSteps}
+                    currentStep={currentStep}
+                    distanceToNextWaypoint={distanceToNextWaypoint}
+                    accuracy={accuracy}
+                    onStop={stopNavigation}
+                    onSkip={skipToNextStep}
+                    onRepeat={repeatCurrentInstruction}
+                />
+            )}
+
+            {/* Navigation User Position Marker */}
+            {isNavigating && navUserPosition && (
+                <MapMarker
+                    position={navUserPosition as LatLngExpression}
+                    icon={
+                        <div className="relative">
+                            <div className="size-4 bg-blue-500 rounded-full border-2 border-white shadow-lg" />
+                            <div className="absolute inset-0 size-4 bg-blue-500 rounded-full animate-ping opacity-75" />
+                        </div>
+                    }
+                    zIndexOffset={2000}
+                />
+            )}
+
+            {/* Navigation Error Toast */}
+            {navError && (
+                <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-3000 bg-destructive text-destructive-foreground px-4 py-2 rounded-lg shadow-lg">
+                    {navError}
                 </div>
             )}
         </>
