@@ -55,7 +55,7 @@ class MongoAPIClient:
             return []
 
         # Chunk strategy: query at start, middle, and end, plus every 100 coordinates
-        chunk_size = 100
+        chunk_size = 10
         representative_indices = [0]  # Always start
 
         if len(coordinates) > 1:
