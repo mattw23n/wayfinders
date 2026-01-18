@@ -59,7 +59,8 @@ function MapContent() {
     const map = useMap();
     const router = useRouter();
     const searchParams = useSearchParams();
-      const PANEL_COLLAPSED_HEIGHT = 60;
+    const PANEL_COLLAPSED_HEIGHT = 60;
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
     const [simulationTime, setSimulationTime] = useState("2026-01-19T11:50:00");
     const [isTimeModalOpen, setIsTimeModalOpen] = useState(false);
     const [tempTime, setTempTime] = useState("");
@@ -203,7 +204,7 @@ function MapContent() {
             setIsLoadingCrowdedVenues(true);
             try {
                 const response = await fetch(
-                    `http://127.0.0.1:8000/venues/status?current_datetime=${encodeURIComponent(simulationTime)}`,
+                    `${API_BASE_URL}/venues/status?current_datetime=${encodeURIComponent(simulationTime)}`,
                 );
                 if (response.ok) {
                     const data = await response.json();
@@ -221,7 +222,7 @@ function MapContent() {
         // Refresh every 5 minutes
         const interval = setInterval(fetchCrowdedVenues, 5 * 60 * 1000);
         return () => clearInterval(interval);
-    }, [simulationTime]);
+    }, [simulationTime, API_BASE_URL]);
 
     // Update URL when locations change
     const updateUrl = (start: Location | null, end: Location | null, time: string) => {
@@ -296,7 +297,7 @@ function MapContent() {
         setLoading(true);
         try {
             const response = await fetch(
-                `http://127.0.0.1:8000/routes/?current_datetime=${encodeURIComponent(time)}`,
+                `${API_BASE_URL}/routes/?current_datetime=${encodeURIComponent(time)}`,
                 {
                     method: "POST",
                     headers: {
