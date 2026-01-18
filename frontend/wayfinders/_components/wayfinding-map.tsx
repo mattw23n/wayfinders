@@ -85,6 +85,17 @@ function MapContent() {
         repeatCurrentInstruction,
     } = useNavigation();
 
+    // Create custom pane for routes to appear above markers
+    useEffect(() => {
+        if (typeof window !== "undefined") {
+            const routePane = map.getPane('routePane');
+            if (!routePane) {
+                const pane = map.createPane('routePane');
+                pane.style.zIndex = '650'; // Higher than markerPane (600)
+            }
+        }
+    }, [map]);
+
     useEffect(() => {
         // Import L dynamically only on client side
         if (panelRef.current && typeof window !== "undefined") {
@@ -539,6 +550,7 @@ function MapContent() {
                                 color,
                                 weight,
                                 opacity,
+                                pane: 'routePane',
                             }}
                             className=""
                         />
