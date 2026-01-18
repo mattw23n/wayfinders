@@ -68,6 +68,7 @@ function MapContent() {
     const [crowdedVenues, setCrowdedVenues] = useState<VenueStatus[]>([]);
   const [panelHeight, setPanelHeight] = useState(0);
     const panelRef = useRef<HTMLDivElement>(null);
+    const [isLoadingCrowdedVenues, setIsLoadingCrowdedVenues] = useState(false);
 
     // Navigation state
     const {
@@ -139,6 +140,7 @@ function MapContent() {
     // Fetch crowded venues on mount
     useEffect(() => {
         const fetchCrowdedVenues = async () => {
+            setIsLoadingCrowdedVenues(true);
             try {
                 const response = await fetch(
                     `http://127.0.0.1:8000/venues/status?current_datetime=${encodeURIComponent(simulationTime)}`,
@@ -150,6 +152,8 @@ function MapContent() {
                 }
             } catch (error) {
                 console.error("Error fetching crowded venues:", error);
+            } finally {
+                setIsLoadingCrowdedVenues(false);
             }
         };
 
@@ -349,6 +353,39 @@ function MapContent() {
                             </div>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Syncing Indicator */}
+            {isLoadingCrowdedVenues && (
+                <div
+                className={`absolute left-4 z-1000 flex items-center gap-2 px-3 py-2 bg-background border border-border rounded-lg shadow-md pointer-events-auto transition-all duration-300 ${
+                    routes.length > 0 && isPanelOpen
+                    ? "bottom-[calc(var(--route-panel-offset,0px)+0.75rem)]"
+                    : "bottom-3"
+                }`}
+                >
+                <svg
+                    className="animate-spin h-4 w-4 text-primary"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                >
+                    <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                    />
+                    <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                </svg>
+                <span className="text-sm font-medium">Syncing venues...</span>
                 </div>
             )}
 
@@ -745,16 +782,6 @@ export function WayfindingMap({
     center = [1.2959854, 103.7766606],
     zoom = 16,
 }: WayfindingMapProps) {
-    const { theme, setTheme } = useTheme();
-    const [mounted, setMounted] = useState(false);
-
-    useEffect(() => {
-        setMounted(true);
-    }, []);
-
-    if (!mounted) {
-        return null;
-    }
 
     return (
         <div className="relative w-full h-screen">
