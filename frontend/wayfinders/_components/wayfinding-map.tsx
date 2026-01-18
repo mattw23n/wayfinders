@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {useSearchParams, useRouter} from "next/navigation";
 import {
     Map,
     MapLayers,
@@ -57,8 +56,6 @@ const SINGAPORE_BBOX: [number, number, number, number] = [
 
 function MapContent() {
     const map = useMap();
-    const router = useRouter();
-    const searchParams = useSearchParams();
     const PANEL_COLLAPSED_HEIGHT = 60;
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
     const [simulationTime, setSimulationTime] = useState("2026-01-19T11:50:00");
@@ -74,7 +71,6 @@ function MapContent() {
     const [panelHeight, setPanelHeight] = useState(0);
     const panelRef = useRef<HTMLDivElement>(null);
     const [isLoadingCrowdedVenues, setIsLoadingCrowdedVenues] = useState(false);
-    const [hasLoadedFromUrl, setHasLoadedFromUrl] = useState(false);
 
     // Navigation state
     const {
@@ -91,42 +87,6 @@ function MapContent() {
         skipToNextStep,
         repeatCurrentInstruction,
     } = useNavigation();
-
-    // Load route from URL parameters on mount
-    useEffect(() => {
-        if (hasLoadedFromUrl) return;
-
-        const startLat = searchParams.get('startLat');
-        const startLng = searchParams.get('startLng');
-        const endLat = searchParams.get('endLat');
-        const endLng = searchParams.get('endLng');
-        const time = searchParams.get('time');
-
-        if (startLat && startLng && endLat && endLng) {
-            const start: Location = {
-                name: "Shared Start Location",
-                coordinates: [parseFloat(startLat), parseFloat(startLng)]
-            };
-            const end: Location = {
-                name: "Shared End Location",
-                coordinates: [parseFloat(endLat), parseFloat(endLng)]
-            };
-
-            setStartLocation(start);
-            setEndLocation(end);
-            
-            if (time) {
-                setSimulationTime(time);
-            }
-
-            setHasLoadedFromUrl(true);
-
-            // Auto-calculate route after a brief delay
-            setTimeout(() => {
-                handleCalculateRouteWithLocations(start, end, time || simulationTime);
-            }, 500);
-        }
-    }, [searchParams, hasLoadedFromUrl, simulationTime]);
 
     // Create custom panes for proper layering
     useEffect(() => {
@@ -224,24 +184,6 @@ function MapContent() {
         return () => clearInterval(interval);
     }, [simulationTime, API_BASE_URL]);
 
-    // Update URL when locations change
-    const updateUrl = (start: Location | null, end: Location | null, time: string) => {
-        if (!start || !end) {
-            router.push('/', { scroll: false });
-            return;
-        }
-
-        const params = new URLSearchParams();
-        params.set('startLat', start.coordinates[0].toString());
-        params.set('startLng', start.coordinates[1].toString());
-        params.set('endLat', end.coordinates[0].toString());
-        params.set('endLng', end.coordinates[1].toString());
-        params.set('time', time);
-
-        router.push(`/?${params.toString()}`, { scroll: false });
-    };
-
-    // Update URL when locations change
     const handleStartSelect = (feature: PlaceFeature) => {
         const location: Location = {
             name: feature.properties.name || "Start Location",
@@ -257,11 +199,6 @@ function MapContent() {
             duration: 1,
             easeLinearity: 0.5,
         });
-
-        // Update URL when both locations are set
-        if (endLocation) {
-            updateUrl(location, endLocation, simulationTime);
-        }
     };
 
     const handleEndSelect = (feature: PlaceFeature) => {
@@ -279,25 +216,18 @@ function MapContent() {
             duration: 1,
             easeLinearity: 0.5,
         });
-
-        // Update URL when both locations are set
-        if (startLocation) {
-            updateUrl(startLocation, location, simulationTime);
-        }
     };
 
-    const handleCalculateRouteWithLocations = async (
-        start: Location,
-        end: Location,
-        time: string
-    ) => {
+    const handleCalculateRoute = async () => {
+        if (!startLocation || !endLocation) return;
+
         setRoutes([]);
         setIsPanelOpen(false);
 
         setLoading(true);
         try {
             const response = await fetch(
-                `${API_BASE_URL}/routes/?current_datetime=${encodeURIComponent(time)}`,
+                `${API_BASE_URL}/routes/?current_datetime=${encodeURIComponent(simulationTime)}`,
                 {
                     method: "POST",
                     headers: {
@@ -305,12 +235,12 @@ function MapContent() {
                     },
                     body: JSON.stringify({
                         start: {
-                            longitude: start.coordinates[1],
-                            latitude: start.coordinates[0],
+                            longitude: startLocation.coordinates[1],
+                            latitude: startLocation.coordinates[0],
                         },
                         end: {
-                            longitude: end.coordinates[1],
-                            latitude: end.coordinates[0],
+                            longitude: endLocation.coordinates[1],
+                            latitude: endLocation.coordinates[0],
                         },
                     }),
                 },
@@ -357,84 +287,23 @@ function MapContent() {
         }
     };
 
-    const handleCalculateRoute = async () => {
-        if (!startLocation || !endLocation) return;
-
-        // Update URL before calculating
-        updateUrl(startLocation, endLocation, simulationTime);
-
-        await handleCalculateRouteWithLocations(startLocation, endLocation, simulationTime);
-    };
-
     return (
         <>
-            {/* Start Location with Clear Button */}
-            <div className="absolute top-3 left-3 z-9999 flex items-center gap-2">
-                <MapSearchControl
-                    placeholder="Search start location..."
-                    onPlaceSelect={handleStartSelect}
-                    bbox={SINGAPORE_BBOX}
-                />
-            </div>
-            {startLocation && startLocation.name === "Shared Start Location" && (
-                <Button
-                    variant="secondary"
-                    size="icon"
-                    className="absolute shadow-md pointer-events-auto top-4 left-[17rem] z-9999"
-                    onClick={() => {
-                        setStartLocation(null);
-                        setRoutes([]);
-                        if (!endLocation) {
-                            router.push('/', { scroll: false });
-                        }
-                    }}
-                >
-                    <X className="h-4 w-4" />
-                </Button>
-            )}
+            {/* First Search Control - START */}
+            <MapSearchControl
+                className="top-4 left-4 z-9999"
+                placeholder="Search start location..."
+                onPlaceSelect={handleStartSelect}
+                bbox={SINGAPORE_BBOX}
+            />
 
-            {/* Coordinate Display for Start (if from URL) */}
-            {startLocation && startLocation.name === "Shared Start Location" && (
-                <div className="absolute top-5 left-13 z-9999 pointer-events-auto">
-                    <div className="bg-background border border-border rounded-lg px-3 py-1.5 shadow-md text-xs text-muted-foreground">
-                        {startLocation.coordinates[0].toFixed(6)}, {startLocation.coordinates[1].toFixed(6)}
-                    </div>
-                </div>
-            )}
-
-            {/* End Location with Clear Button */}
-            <div className={"absolute top-14 left-3 z-9998 flex items-center gap-2"}>
-                <MapSearchControl
-                    placeholder="Search destination..."
-                    onPlaceSelect={handleEndSelect}
-                    bbox={SINGAPORE_BBOX}
-                />
-            </div>
-            {endLocation && endLocation.name === "Shared End Location" && (
-                    <Button
-                        variant="secondary"
-                        size="icon"
-                        className="absolute top-15 left-[17rem] shadow-md pointer-events-auto z-9998"
-                        onClick={() => {
-                            setEndLocation(null);
-                            setRoutes([]);
-                            if (!startLocation) {
-                                router.push('/', { scroll: false });
-                            }
-                        }}
-                    >
-                        <X className="h-4 w-4" />
-                </Button>
-            )}
-
-            {/* Coordinate Display for End (if from URL) */}
-            {endLocation && endLocation.name === "Shared End Location" && (
-                <div className={"absolute top-16 left-13 z-9998 pointer-events-auto "}>
-                    <div className="bg-background border border-border rounded-lg px-3 py-1.5 shadow-md text-xs text-muted-foreground">
-                        {endLocation.coordinates[0].toFixed(6)}, {endLocation.coordinates[1].toFixed(6)}
-                    </div>
-                </div>
-            )}
+            {/* Second Search Control - END */}
+            <MapSearchControl
+                className="top-15 left-4"
+                placeholder="Search destination..."
+                onPlaceSelect={handleEndSelect}
+                bbox={SINGAPORE_BBOX}
+            />
 
             {/* Time Settings Button */}
             <div className="absolute top-4 right-4 z-2000 pointer-events-auto">
