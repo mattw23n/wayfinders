@@ -3,8 +3,56 @@
         "roomName": "The Deck",
         "floor": 1,
         "location": {
-            "x": 103.77256436002068,
-            "y": 1.2944483789971617
+            "x": 103.772478,
+            "y": 1.294721
+        }
+    },
+    "FRONTIER": {
+        "roomName": "Frontier",
+        "floor": 1,
+        "location": {
+            "x": 103.780680,
+            "y": 1.296526
+        }
+    },
+    "PGP-CANTEEN": {
+        "roomName": "PGP Canteen",
+        "floor": 1,
+        "location": {
+            "x": 103.780825,
+            "y": 1.290838
+        }
+    },
+    "TECHNO-EDGE": {
+        "roomName": "Techno Edge",
+        "floor": 1,
+        "location": {
+            "x": 103.771496,
+            "y": 1.298097
+        }
+    },
+    "THE-TERRACE": {
+        "roomName": "The Terrace",
+        "floor": 1,
+        "location": {
+            "x": 103.774489,
+            "y": 1.294611
+        }
+    },
+    "FLAVOURS": {
+        "roomName": "Flavours",
+        "floor": 1,
+        "location": {
+            "x": 103.772848,
+            "y": 1.304594
+        }
+    },
+    "FINE-FOOD": {
+        "roomName": "Fine Food",
+        "floor": 1,
+        "location": {
+            "x": 103.773666,
+            "y": 1.303994
         }
     }
 }
