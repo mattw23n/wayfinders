@@ -22,7 +22,6 @@ import {
   MapPin,
   Navigation,
   Route as RouteIcon,
-  Settings,
   Volume2,
   X,
 } from "lucide-react";
@@ -297,7 +296,6 @@ function MapContent() {
                         setIsTimeModalOpen(true);
                     }}
                 >
-                    {/* <Settings className="h-5 w-5" /> */}
                     <Clock className="h-5 w-5" />
                 </Button>
             </div>
@@ -550,7 +548,7 @@ function MapContent() {
             {/* Calculate Route Button */}
             <div className="absolute top-26 left-4 z-1000">
                 <Button
-                    className={!startLocation || !endLocation ? "bg-gray-300" : "bg-white"}
+                    className={!startLocation || !endLocation ? "bg-gray-300" : ""}
                     size="lg"
                     onClick={handleCalculateRoute}
                     disabled={!startLocation || !endLocation || loading}
