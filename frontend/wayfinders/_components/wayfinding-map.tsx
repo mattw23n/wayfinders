@@ -408,7 +408,7 @@ function MapContent() {
             )}
 
             <div
-                className={`absolute right-4 z-1000 flex pointer-events-auto gap-3 bottom-[calc(var(--route-panel-offset,0px)+0.75rem)] ${
+                className={`absolute right-4 z-1000 flex pointer-events-auto gap-3 bottom-[calc(var(--route-panel-offset,0px)+3rem)] ${
                     isPanelOpen ? "flex-row items-end" : "flex-col items-end"
                 }`}
             >
