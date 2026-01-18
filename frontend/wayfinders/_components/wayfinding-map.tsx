@@ -427,7 +427,32 @@ function MapContent() {
                 <MapMarker
                     key={`start-${startLocation.coordinates[0]}-${startLocation.coordinates[1]}`}
                     position={startLocation.coordinates as LatLngExpression}
-                    icon={<MapPin className="size-8 text-black" />}
+                    icon={
+                        <svg
+                            version="1.0"
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 512.000000 512.000000"
+                            preserveAspectRatio="xMidYMid meet"
+                            className="h-8 w-8"
+                        >
+                            <g
+                                transform="translate(0.000000,512.000000) scale(0.100000,-0.100000)"
+                                fill="#000000"
+                                stroke="none"
+                            >
+                                <path
+                                    d="M2425 5110 c-231 -17 -471 -86 -683 -195 -540 -279 -861 -762 -953
+                                    -1435 -17 -124 -14 -423 5 -555 21 -139 59 -294 101 -410 74 -207 113 -267
+                                    901 -1406 417 -604 761 -1098 764 -1098 3 0 345 491 760 1091 637 920 765
+                                    1112 821 1224 140 279 201 552 201 899 1 567 -205 1076 -570 1415 -234 217
+                                    -543 375 -860 441 -79 16 -342 42 -377 37 -5 0 -55 -4 -110 -8z m277 -1181
+                                    c29 -6 91 -29 137 -51 199 -95 331 -306 331 -528 0 -173 -73 -336 -202 -448
+                                    -158 -140 -382 -184 -578 -116 -103 36 -182 87 -248 159 -63 69 -95 123 -128
+                                    221 -36 106 -39 245 -7 349 43 136 148 272 268 344 116 70 289 99 427 70z"
+                                />
+                            </g>
+                        </svg>
+                    }
                     pane="locationMarkerPane"
                 >
                     <MapTooltip side="top">Start</MapTooltip>
@@ -445,7 +470,7 @@ function MapContent() {
                             xmlns="http://www.w3.org/2000/svg"
                             viewBox="0 0 512.000000 512.000000"
                             preserveAspectRatio="xMidYMid meet"
-                            className="h-6 w-6"
+                            className="h-8 w-8"
                         >
                             <g
                                 transform="translate(0.000000,512.000000) scale(0.100000,-0.100000)"
