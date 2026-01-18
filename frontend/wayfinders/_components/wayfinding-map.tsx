@@ -30,7 +30,6 @@ import {
     useNavigation,
 } from "@/hooks/use-navigation";
 import { NavigationOverlay } from "@/_components/navigation-overlay";
-import { useTheme } from "next-themes";
 import type { LatLngExpression } from "leaflet";
 // import L from "leaflet";
 import type { PlaceFeature } from "@/components/ui/place-autocomplete";
@@ -88,13 +87,21 @@ function MapContent() {
         repeatCurrentInstruction,
     } = useNavigation();
 
-    // Create custom pane for routes to appear above markers
+    // Create custom panes for proper layering
     useEffect(() => {
         if (typeof window !== "undefined") {
+            // Route pane - above heatmap markers (600) but below location markers
             const routePane = map.getPane("routePane");
             if (!routePane) {
                 const pane = map.createPane("routePane");
                 pane.style.zIndex = "650"; // Higher than markerPane (600)
+            }
+
+            // Location marker pane - above routes
+            const locationMarkerPane = map.getPane("locationMarkerPane");
+            if (!locationMarkerPane) {
+                const pane = map.createPane("locationMarkerPane");
+                pane.style.zIndex = "700"; // Higher than routePane (650)
             }
         }
     }, [map]);
@@ -415,25 +422,62 @@ function MapContent() {
                 <MapLayersControl className="!static !top-auto !right-auto !bottom-auto !left-auto" />
             </div>
 
-            {/* Start Location Marker - GREEN */}
+            {/* Start Location Marker */}
             {startLocation && (
                 <MapMarker
                     key={`start-${startLocation.coordinates[0]}-${startLocation.coordinates[1]}`}
                     position={startLocation.coordinates as LatLngExpression}
-                    icon={<MapPin className="size-8 text-green-500" />}
-                    zIndexOffset={1000}
+                    icon={<MapPin className="size-8 text-black" />}
+                    pane="locationMarkerPane"
                 >
                     <MapTooltip side="top">Start</MapTooltip>
                 </MapMarker>
             )}
 
-            {/* End Location Marker - RED */}
+            {/* End Location Marker */}
             {endLocation && (
                 <MapMarker
                     key={`end-${endLocation.coordinates[0]}-${endLocation.coordinates[1]}`}
                     position={endLocation.coordinates as LatLngExpression}
-                    icon={<MapPin className="size-8 text-red-500" />}
-                    zIndexOffset={1000}
+                    icon={
+                        <svg
+                            version="1.0"
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 512.000000 512.000000"
+                            preserveAspectRatio="xMidYMid meet"
+                            className="h-6 w-6"
+                        >
+                            <g
+                                transform="translate(0.000000,512.000000) scale(0.100000,-0.100000)"
+                                fill="#000000"
+                                stroke="none"
+                            >
+                                <path
+                                    d="M660 4994 c-46 -20 -77 -50 -103 -99 l-22 -40 0 -2295 0 -2295 25
+                                    -45 c67 -119 225 -147 327 -57 77 67 73 13 73 936 l0 824 248 -6 c354 -9 546
+                                    -32 842 -102 375 -87 615 -110 1070 -102 425 7 761 49 1101 136 202 52 262 75
+                                    305 119 68 70 65 7 62 1338 l-3 1199 -22 40 c-39 74 -105 115 -182 115 -22 0
+                                    -109 -18 -193 -39 -394 -102 -844 -150 -1293 -138 -317 9 -513 33 -785 97
+                                    -324 77 -509 99 -877 107 l-273 6 0 74 c0 112 -37 180 -122 224 -45 23 -128
+                                    25 -178 3z m935 -539 c72 -8 149 -18 172 -21 l43 -6 2 -400 3 -401 110 -23
+                                    c61 -12 160 -34 220 -48 111 -26 320 -59 453 -71 l72 -7 0 398 0 399 337 0
+                                    c186 0 377 3 426 8 l87 7 0 -401 0 -400 58 6 c249 29 499 75 677 125 58 17
+                                    107 30 110 30 3 0 4 -168 3 -372 l-3 -373 -95 -27 c-139 -41 -414 -94 -580
+                                    -114 -80 -9 -151 -18 -157 -20 -10 -3 -13 -92 -13 -402 l0 -399 -82 -7 c-163
+                                    -13 -476 -19 -620 -11 l-148 7 0 399 0 398 -32 5 c-18 3 -96 12 -173 21 -144
+                                    16 -188 24 -482 91 l-173 38 0 372 0 372 -82 11 c-172 24 -280 32 -520 38
+                                    l-248 6 0 400 0 400 253 -6 c138 -3 311 -13 382 -22z m33 -1549 c73 -9 144
+                                    -19 158 -22 l24 -6 0 -399 0 -399 -22 5 c-82 19 -313 37 -550 42 l-278 6 0
+                                    400 0 400 268 -6 c147 -3 327 -13 400 -21z"
+                                />
+                                <path
+                                    d="M3355 3478 c-60 -5 -239 -8 -398 -6 l-287 3 0 -371 0 -372 138 -7
+c135 -8 498 -1 640 12 l72 6 0 373 0 374 -27 -1 c-16 -1 -77 -6 -138 -11z"
+                                />
+                            </g>
+                        </svg>
+                    }
+                    pane="locationMarkerPane"
                 >
                     <MapTooltip side="top">End</MapTooltip>
                 </MapMarker>
