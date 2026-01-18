@@ -378,7 +378,7 @@ function MapContent() {
             {isLoadingCrowdedVenues && (
                 <div
                     className={
-                        "absolute left-4 z-1000 flex items-center gap-2 px-3 py-2 bg-background border border-border rounded-lg shadow-md pointer-events-auto transition-all duration-300 bottom-[calc(var(--route-panel-offset,0px)+3rem)]"
+                        "absolute left-4 z-1000 flex items-center gap-2 px-3 py-2 bg-background border border-border rounded-lg shadow-md pointer-events-auto transition-all duration-300 bottom-[calc(var(--route-panel-offset,0px)+4rem)]"
                     }
                 >
                     <svg
@@ -408,7 +408,7 @@ function MapContent() {
             )}
 
             <div
-                className={`absolute right-4 z-1000 flex pointer-events-auto gap-3 bottom-[calc(var(--route-panel-offset,0px)+3rem)] ${
+                className={`absolute right-4 z-1000 flex pointer-events-auto gap-3 bottom-[calc(var(--route-panel-offset,0px)+4rem)] ${
                     isPanelOpen ? "flex-row items-end" : "flex-col items-end"
                 }`}
             >
