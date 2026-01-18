@@ -1,38 +1,41 @@
 "use client";
 
-import {useEffect, useRef, useState} from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  Map,
-  MapLayers,
-  MapLayersControl,
-  MapLocateControl,
-  MapMarker,
-  MapMarkerClusterGroup,
-  MapPolyline,
-  MapSearchControl,
-  MapTileLayer,
-  MapTooltip,
-  MapZoomControl
+    Map,
+    MapLayers,
+    MapLayersControl,
+    MapLocateControl,
+    MapMarker,
+    MapMarkerClusterGroup,
+    MapPolyline,
+    MapSearchControl,
+    MapTileLayer,
+    MapTooltip,
+    MapZoomControl,
 } from "@/components/ui/map";
-import {Button} from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
-  ChevronDown,
-  ChevronUp,
-  Clock,
-  MapPin,
-  Navigation,
-  Route as RouteIcon,
-  Volume2,
-  X,
+    ChevronDown,
+    ChevronUp,
+    Clock,
+    MapPin,
+    Navigation,
+    Route as RouteIcon,
+    Volume2,
+    X,
 } from "lucide-react";
-import {type RouteData as NavRouteData, useNavigation,} from "@/hooks/use-navigation";
-import {NavigationOverlay} from "@/_components/navigation-overlay";
-import {useTheme} from "next-themes";
-import type {LatLngExpression} from "leaflet";
+import {
+    type RouteData as NavRouteData,
+    useNavigation,
+} from "@/hooks/use-navigation";
+import { NavigationOverlay } from "@/_components/navigation-overlay";
+import { useTheme } from "next-themes";
+import type { LatLngExpression } from "leaflet";
 // import L from "leaflet";
-import type {PlaceFeature} from "@/components/ui/place-autocomplete";
-import {useMap} from "react-leaflet";
-import type {NearbyVenue, RouteData, RouteStep} from "@/types/route";
+import type { PlaceFeature } from "@/components/ui/place-autocomplete";
+import { useMap } from "react-leaflet";
+import type { NearbyVenue, RouteData, RouteStep } from "@/types/route";
 
 interface WayfindingMapProps {
     center?: [number, number];
@@ -54,7 +57,7 @@ const SINGAPORE_BBOX: [number, number, number, number] = [
 
 function MapContent() {
     const map = useMap();
-  const PANEL_COLLAPSED_HEIGHT = 60;
+    const PANEL_COLLAPSED_HEIGHT = 60;
     const [simulationTime, setSimulationTime] = useState("2026-01-19T11:50:00");
     const [isTimeModalOpen, setIsTimeModalOpen] = useState(false);
     const [tempTime, setTempTime] = useState("");
@@ -65,7 +68,7 @@ function MapContent() {
     const [isPanelOpen, setIsPanelOpen] = useState(false);
     const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
     const [crowdedVenues, setCrowdedVenues] = useState<VenueStatus[]>([]);
-  const [panelHeight, setPanelHeight] = useState(0);
+    const [panelHeight, setPanelHeight] = useState(0);
     const panelRef = useRef<HTMLDivElement>(null);
     const [isLoadingCrowdedVenues, setIsLoadingCrowdedVenues] = useState(false);
 
@@ -88,10 +91,10 @@ function MapContent() {
     // Create custom pane for routes to appear above markers
     useEffect(() => {
         if (typeof window !== "undefined") {
-            const routePane = map.getPane('routePane');
+            const routePane = map.getPane("routePane");
             if (!routePane) {
-                const pane = map.createPane('routePane');
-                pane.style.zIndex = '650'; // Higher than markerPane (600)
+                const pane = map.createPane("routePane");
+                pane.style.zIndex = "650"; // Higher than markerPane (600)
             }
         }
     }, [map]);
@@ -106,46 +109,46 @@ function MapContent() {
         }
     }, [routes]);
 
-  useEffect(() => {
-    if (!panelRef.current || routes.length === 0) {
-      setPanelHeight(0);
-      return;
-    }
+    useEffect(() => {
+        if (!panelRef.current || routes.length === 0) {
+            setPanelHeight(0);
+            return;
+        }
 
-    const panelElement = panelRef.current;
-    const updatePanelHeight = () => {
-      setPanelHeight(panelElement.getBoundingClientRect().height);
-    };
+        const panelElement = panelRef.current;
+        const updatePanelHeight = () => {
+            setPanelHeight(panelElement.getBoundingClientRect().height);
+        };
 
-    updatePanelHeight();
+        updatePanelHeight();
 
-    if (typeof ResizeObserver === "undefined") {
-      return;
-    }
+        if (typeof ResizeObserver === "undefined") {
+            return;
+        }
 
-    const resizeObserver = new ResizeObserver(updatePanelHeight);
-    resizeObserver.observe(panelElement);
-    return () => resizeObserver.disconnect();
-  }, [routes.length]);
+        const resizeObserver = new ResizeObserver(updatePanelHeight);
+        resizeObserver.observe(panelElement);
+        return () => resizeObserver.disconnect();
+    }, [routes.length]);
 
-  useEffect(() => {
-    const container = map.getContainer();
-    const visiblePanelHeight =
-      routes.length > 0
-        ? isPanelOpen
-          ? panelHeight
-          : PANEL_COLLAPSED_HEIGHT
-        : 0;
+    useEffect(() => {
+        const container = map.getContainer();
+        const visiblePanelHeight =
+            routes.length > 0
+                ? isPanelOpen
+                    ? panelHeight
+                    : PANEL_COLLAPSED_HEIGHT
+                : 0;
 
-    container.style.setProperty(
-      "--route-panel-offset",
-      `${visiblePanelHeight}px`,
-    );
+        container.style.setProperty(
+            "--route-panel-offset",
+            `${visiblePanelHeight}px`,
+        );
 
-    return () => {
-      container.style.removeProperty("--route-panel-offset");
-    };
-  }, [map, panelHeight, isPanelOpen, routes.length]);
+        return () => {
+            container.style.removeProperty("--route-panel-offset");
+        };
+    }, [map, panelHeight, isPanelOpen, routes.length]);
 
     // Fetch crowded venues on mount
     useEffect(() => {
@@ -174,8 +177,6 @@ function MapContent() {
     }, [simulationTime]);
 
     const handleStartSelect = (feature: PlaceFeature) => {
-        console.log("Start selected - full feature:", feature);
-
         const location: Location = {
             name: feature.properties.name || "Start Location",
             address: feature.properties.name || "",
@@ -185,17 +186,14 @@ function MapContent() {
             ],
         };
 
-        console.log("Start location created:", location);
         setStartLocation(location);
         map.flyTo(location.coordinates, map.getZoom(), {
             duration: 1,
-            easeLinearity: 0.5
+            easeLinearity: 0.5,
         });
     };
 
     const handleEndSelect = (feature: PlaceFeature) => {
-        console.log("End selected - full feature:", feature);
-
         const location: Location = {
             name: feature.properties.name || "End Location",
             address: feature.properties.name || "",
@@ -205,11 +203,10 @@ function MapContent() {
             ],
         };
 
-        console.log("End location created:", location);
         setEndLocation(location);
         map.flyTo(location.coordinates, map.getZoom(), {
             duration: 1,
-            easeLinearity: 0.5
+            easeLinearity: 0.5,
         });
     };
 
@@ -222,22 +219,25 @@ function MapContent() {
 
         setLoading(true);
         try {
-            const response = await fetch(`http://127.0.0.1:8000/routes/?current_datetime=${encodeURIComponent(simulationTime)}`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    start: {
-                        longitude: startLocation.coordinates[1],
-                        latitude: startLocation.coordinates[0],
+            const response = await fetch(
+                `http://127.0.0.1:8000/routes/?current_datetime=${encodeURIComponent(simulationTime)}`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
                     },
-                    end: {
-                        longitude: endLocation.coordinates[1],
-                        latitude: endLocation.coordinates[0],
-                    }
-                }),
-            });
+                    body: JSON.stringify({
+                        start: {
+                            longitude: startLocation.coordinates[1],
+                            latitude: startLocation.coordinates[0],
+                        },
+                        end: {
+                            longitude: endLocation.coordinates[1],
+                            latitude: endLocation.coordinates[0],
+                        },
+                    }),
+                },
+            );
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -248,16 +248,20 @@ function MapContent() {
             setRoutes(data.routes || []);
             setSelectedRouteIndex(0);
             setIsPanelOpen(true);
-            
+
             // Fly to fit the entire route
             if (data.routes && data.routes.length > 0) {
                 const firstRoute = data.routes[0];
-                const coordinates = firstRoute.route?.geometry?.coordinates || [];
+                const coordinates =
+                    firstRoute.route?.geometry?.coordinates || [];
 
                 if (coordinates.length > 0 && typeof window !== "undefined") {
                     import("leaflet").then((L) => {
                         const bounds = L.latLngBounds(
-                            coordinates.map((coord: [number, number]) => [coord[1], coord[0]])
+                            coordinates.map((coord: [number, number]) => [
+                                coord[1],
+                                coord[0],
+                            ]),
                         );
 
                         // Fly to bounds with padding
@@ -265,7 +269,7 @@ function MapContent() {
                             padding: [50, 50],
                             duration: 0.7,
                             easeLinearity: 0.5,
-                            maxZoom: 17
+                            maxZoom: 17,
                         });
                     });
                 }
@@ -368,44 +372,48 @@ function MapContent() {
             {/* Syncing Indicator */}
             {isLoadingCrowdedVenues && (
                 <div
-                className={"absolute left-4 z-1000 flex items-center gap-2 px-3 py-2 bg-background border border-border rounded-lg shadow-md pointer-events-auto transition-all duration-300 bottom-[calc(var(--route-panel-offset,0px)+0.75rem)]"}
+                    className={
+                        "absolute left-4 z-1000 flex items-center gap-2 px-3 py-2 bg-background border border-border rounded-lg shadow-md pointer-events-auto transition-all duration-300 bottom-[calc(var(--route-panel-offset,0px)+0.75rem)]"
+                    }
                 >
-                <svg
-                    className="animate-spin h-4 w-4 text-primary"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                >
-                    <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    />
-                    <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    />
-                </svg>
-                <span className="text-sm font-medium">Syncing venues...</span>
+                    <svg
+                        className="animate-spin h-4 w-4 text-primary"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                    >
+                        <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                        />
+                        <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                    </svg>
+                    <span className="text-sm font-medium">
+                        Syncing venues...
+                    </span>
                 </div>
             )}
 
-          <div
-            className={`absolute right-4 z-1000 flex pointer-events-auto gap-3 bottom-[calc(var(--route-panel-offset,0px)+0.75rem)] ${
-              isPanelOpen ? "flex-row items-end" : "flex-col items-end"
-            }`}
-          >
-            <MapZoomControl
-              orientation={isPanelOpen ? "horizontal" : "vertical"}
-              className="!static !top-auto !right-auto !bottom-auto !left-auto"
-            />
-            <MapLocateControl className="!static !top-auto !right-auto !bottom-auto !left-auto"/>
-            <MapLayersControl className="!static !top-auto !right-auto !bottom-auto !left-auto"/>
-          </div>
+            <div
+                className={`absolute right-4 z-1000 flex pointer-events-auto gap-3 bottom-[calc(var(--route-panel-offset,0px)+0.75rem)] ${
+                    isPanelOpen ? "flex-row items-end" : "flex-col items-end"
+                }`}
+            >
+                <MapZoomControl
+                    orientation={isPanelOpen ? "horizontal" : "vertical"}
+                    className="!static !top-auto !right-auto !bottom-auto !left-auto"
+                />
+                <MapLocateControl className="!static !top-auto !right-auto !bottom-auto !left-auto" />
+                <MapLayersControl className="!static !top-auto !right-auto !bottom-auto !left-auto" />
+            </div>
 
             {/* Start Location Marker - GREEN */}
             {startLocation && (
@@ -440,17 +448,21 @@ function MapContent() {
                 icon={(markerCount) => {
                     // Aggregate total class size for the cluster
                     const clusterSize = markerCount;
-                    
+
                     // Determine cluster styling based on size
-                    const sizeClass = 
-                        clusterSize < 3 ? "size-8" :
-                        clusterSize < 10 ? "size-10" :
-                        "size-12";
-                    
+                    const sizeClass =
+                        clusterSize < 3
+                            ? "size-8"
+                            : clusterSize < 10
+                              ? "size-10"
+                              : "size-12";
+
                     const colorClass =
-                        clusterSize < 3 ? "bg-yellow-500 text-white" :
-                        clusterSize < 10 ? "bg-orange-500 text-white" :
-                        "bg-red-600 text-white";
+                        clusterSize < 3
+                            ? "bg-yellow-500 text-white"
+                            : clusterSize < 10
+                              ? "bg-orange-500 text-white"
+                              : "bg-red-600 text-white";
 
                     return (
                         <div
@@ -466,26 +478,26 @@ function MapContent() {
                         (sum, cls) => sum + cls.size,
                         0,
                     );
-                    
+
                     // Determine marker size and color based on crowd level
                     const crowdLevel =
                         totalClassSize < 50
                             ? "low"
                             : totalClassSize < 150
-                            ? "medium"
-                            : "high";
+                              ? "medium"
+                              : "high";
                     const sizeClass =
                         crowdLevel === "low"
                             ? "size-6"
                             : crowdLevel === "medium"
-                            ? "size-8"
-                            : "size-10";
+                              ? "size-8"
+                              : "size-10";
                     const bgColor =
                         crowdLevel === "low"
                             ? "bg-yellow-500"
                             : crowdLevel === "medium"
-                            ? "bg-orange-500"
-                            : "bg-red-600";
+                              ? "bg-orange-500"
+                              : "bg-red-600";
 
                     return (
                         <MapMarker
@@ -535,7 +547,7 @@ function MapContent() {
                     const colors = ["#00c951", "#2b7fff", "#ad46ff"];
                     const color = colors[index] || "#6b7280";
 
-                     const weight = selectedRouteIndex === index ? 6 : 3;
+                    const weight = selectedRouteIndex === index ? 6 : 3;
                     const opacity = selectedRouteIndex === index ? 1 : 0.6;
 
                     return (
@@ -546,7 +558,7 @@ function MapContent() {
                                 color,
                                 weight,
                                 opacity,
-                                pane: 'routePane',
+                                pane: "routePane",
                             }}
                             className=""
                         />
@@ -556,7 +568,9 @@ function MapContent() {
             {/* Calculate Route Button */}
             <div className="absolute top-26 left-4 z-1000">
                 <Button
-                    className={!startLocation || !endLocation ? "bg-gray-300" : ""}
+                    className={
+                        !startLocation || !endLocation ? "bg-gray-300" : ""
+                    }
                     size="lg"
                     onClick={handleCalculateRoute}
                     disabled={!startLocation || !endLocation || loading}
@@ -647,14 +661,16 @@ function MapContent() {
                                     "border-gray-500 bg-gray-50 dark:bg-gray-950";
 
                                 return (
-                                  <div
+                                    <div
                                         key={index}
                                         className={`shrink-0 px-4 py-3 rounded-lg border-2 transition-all ${
                                             selectedRouteIndex === index
                                                 ? colorClass
                                                 : "border-border bg-muted"
                                         }`}
-                                        onClick={() => setSelectedRouteIndex(index)}
+                                        onClick={() =>
+                                            setSelectedRouteIndex(index)
+                                        }
                                     >
                                         <div className="text-xs font-medium mb-1">
                                             Route {index + 1}
@@ -687,7 +703,7 @@ function MapContent() {
                                             <Volume2 className="h-3 w-3 mr-1" />
                                             Start Navigation
                                         </Button>
-                                  </div>
+                                    </div>
                                 );
                             })}
                         </div>
@@ -788,7 +804,6 @@ export function WayfindingMap({
     center = [1.2959854, 103.7766606],
     zoom = 16,
 }: WayfindingMapProps) {
-
     return (
         <div className="relative w-full h-screen">
             <Map center={center} zoom={zoom} className="w-full h-full">
@@ -822,7 +837,7 @@ export function WayfindingMap({
                         url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
                         attribution="&copy; CARTO"
                     />
-                  <MapContent/>
+                    <MapContent />
                 </MapLayers>
             </Map>
         </div>
