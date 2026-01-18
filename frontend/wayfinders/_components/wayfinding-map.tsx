@@ -368,11 +368,7 @@ function MapContent() {
             {/* Syncing Indicator */}
             {isLoadingCrowdedVenues && (
                 <div
-                className={`absolute left-4 z-1000 flex items-center gap-2 px-3 py-2 bg-background border border-border rounded-lg shadow-md pointer-events-auto transition-all duration-300 ${
-                    routes.length > 0 && isPanelOpen
-                    ? "bottom-[calc(var(--route-panel-offset,0px)+0.75rem)]"
-                    : "bottom-3"
-                }`}
+                className={"absolute left-4 z-1000 flex items-center gap-2 px-3 py-2 bg-background border border-border rounded-lg shadow-md pointer-events-auto transition-all duration-300 bottom-[calc(var(--route-panel-offset,0px)+0.75rem)]"}
                 >
                 <svg
                     className="animate-spin h-4 w-4 text-primary"
