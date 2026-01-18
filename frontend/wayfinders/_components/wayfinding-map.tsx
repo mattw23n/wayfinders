@@ -71,6 +71,7 @@ function MapContent() {
     const [panelHeight, setPanelHeight] = useState(0);
     const panelRef = useRef<HTMLDivElement>(null);
     const [isLoadingCrowdedVenues, setIsLoadingCrowdedVenues] = useState(false);
+    const [isLocatingUser, setIsLocatingUser] = useState(false);
 
     // Navigation state
     const {
@@ -183,6 +184,67 @@ function MapContent() {
         const interval = setInterval(fetchCrowdedVenues, 5 * 60 * 1000);
         return () => clearInterval(interval);
     }, [simulationTime, API_BASE_URL]);
+
+    const handleStartNavigation = async (routeData: NavRouteData) => {
+        setIsLocatingUser(true);
+        
+        try {
+            // Request user location
+            map.locate({ 
+                setView: false, 
+                maxZoom: map.getMaxZoom(),
+                enableHighAccuracy: true,
+                timeout: 10000
+            });
+
+            // Wait for location
+            await new Promise<void>((resolve, reject) => {
+                const onLocationFound = (location: any) => {
+                    map.off('locationfound', onLocationFound);
+                    map.off('locationerror', onLocationError);
+                    
+                    // Fly to user's location
+                    map.flyTo([location.latitude, location.longitude], 18, {
+                        duration: 1,
+                        easeLinearity: 0.5,
+                    });
+                    
+                    // Start navigation
+                    startNavigation(routeData);
+                    setIsLocatingUser(false);
+                    resolve();
+                };
+
+                const onLocationError = (error: any) => {
+                    map.off('locationfound', onLocationFound);
+                    map.off('locationerror', onLocationError);
+                    
+                    console.error('Location error:', error);
+                    setIsLocatingUser(false);
+                    
+                    // Still start navigation, but show a warning
+                    alert('Could not get your location. Navigation will start from the route start point.');
+                    
+                    // Fly to start location instead
+                    if (startLocation) {
+                        map.flyTo(startLocation.coordinates, 18, {
+                            duration: 1,
+                            easeLinearity: 0.5,
+                        });
+                    }
+                    
+                    startNavigation(routeData);
+                    reject(error);
+                };
+
+                map.once('locationfound', onLocationFound);
+                map.once('locationerror', onLocationError);
+            });
+        } catch (error) {
+            // Error already handled in the promise
+            console.error('Navigation start error:', error);
+        }
+    };
 
     const handleStartSelect = (feature: PlaceFeature) => {
         const location: Location = {
@@ -761,11 +823,11 @@ c135 -8 498 -1 640 12 l72 6 0 373 0 374 -27 -1 c-16 -1 -77 -6 -138 -11z"
                                             className="mt-2 w-full cursor-pointer"
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                startNavigation(
+                                                handleStartNavigation(
                                                     routeData as NavRouteData,
                                                 );
                                             }}
-                                            disabled={isNavigating}
+                                            disabled={isNavigating || isLocatingUser}
                                         >
                                             <Volume2 className="h-3 w-3 mr-1" />
                                             Start Navigation
