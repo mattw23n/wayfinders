@@ -6,7 +6,7 @@ A smart pedestrian wayfinding application that calculates optimal walking routes
 
 - **Smart Route Calculation**: Generates multiple route options using OpenRouteService API
 - **Crowd Avoidance**: Analyzes nearby venues and class schedules to calculate crowdedness penalties
-- **AI-Powered Explanations**: Uses Google Gemini AI to provide human-readable route recommendations
+- **AI-Powered Explanations**: Uses Anthropic AI to provide human-readable route recommendations
 - **Interactive Map**: Built with Leaflet for smooth map interactions
 - **Turn-by-turn Navigation**: Detailed step-by-step walking directions
 - **Route Comparison**: Visual comparison of multiple routes with distance, duration, and crowdedness scores
@@ -26,7 +26,7 @@ A smart pedestrian wayfinding application that calculates optimal walking routes
 - **Framework**: FastAPI
 - **Language**: Python 3
 - **Database**: MongoDB
-- **AI**: Google Gemini (via LangChain)
+- **AI**: Anthropic Haiku (via LangChain)
 - **Routing**: OpenRouteService API
 - **HTTP Client**: httpx
 
@@ -36,7 +36,7 @@ A smart pedestrian wayfinding application that calculates optimal walking routes
 - **Python** 3.9+
 - **MongoDB** (local or cloud instance)
 - **OpenRouteService API Key** - [Get one here](https://openrouteservice.org/)
-- **Google Gemini API Key** - [Get one here](https://ai.google.dev/)
+- **Anthropic Haiku API Key**
 
 ## Installation
 
@@ -72,15 +72,15 @@ Configure your `.env` file in the `backend` directory:
 
 ```env
 # MongoDB
-MONGODB_URI=mongodb://localhost:27017/
-MONGODB_DB_NAME=wayfinders
+MONGO_DATABASE_URL=mongodb://localhost:27017/
+MONGO_DB_NAME=wayfinders
 
 # OpenRouteService API
 ORS_BASE_URL=https://api.openrouteservice.org
 ORS_API_KEY=your_openrouteservice_api_key
 
-# Google Gemini AI
-GEMINI_API_KEY=your_gemini_api_key
+# Anthropic AI
+ANTHROPIC_API_KEY=your_anthropic_api_key
 ```
 
 ### 3. Frontend Setup
@@ -90,9 +90,6 @@ cd frontend/wayfinders
 
 # Install dependencies
 npm install
-
-# The frontend uses environment variables from the backend
-# No additional .env file needed
 ```
 
 ## Running the Application
@@ -212,7 +209,7 @@ wayfinders/
    - Class schedules at nearby venues
    - Whether classes are starting/ending within 15 minutes
    - Class size and proximity to the route
-4. **AI Explanations**: Google Gemini generates friendly, human-readable explanations for each route
+4. **AI Explanations**: Anthropic Haiku generates friendly, human-readable explanations for each route
 5. **Route Ranking**: Routes are sorted by penalty score (lower is better)
 6. **Visualization**: The frontend displays all routes on an interactive map with color-coding
 
@@ -255,4 +252,6 @@ This project is licensed under the MIT License.
 - [OpenRouteService](https://openrouteservice.org/) for routing API
 - [Photon](https://photon.komoot.io/) for geocoding
 - [Leaflet](https://leafletjs.com/) for mapping
-- [Google Gemini](https://ai.google.dev/) for AI-powered explanations
+
+## Devpost Link
+Check out wayfinders on [Devpost](https://devpost.com/software/wayfinders)
