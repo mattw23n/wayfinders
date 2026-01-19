@@ -57,8 +57,9 @@ const SINGAPORE_BBOX: [number, number, number, number] = [
 function MapContent() {
     const map = useMap();
     const PANEL_COLLAPSED_HEIGHT = 60;
-    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
-    const [simulationTime, setSimulationTime] = useState("2026-01-19T11:50:00");
+    const API_BASE_URL =
+        process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+    const [simulationTime, setSimulationTime] = useState<string | null>(null);
     const [isTimeModalOpen, setIsTimeModalOpen] = useState(false);
     const [tempTime, setTempTime] = useState("");
     const [startLocation, setStartLocation] = useState<Location | null>(null);
@@ -164,9 +165,10 @@ function MapContent() {
         const fetchCrowdedVenues = async () => {
             setIsLoadingCrowdedVenues(true);
             try {
-                const response = await fetch(
-                    `${API_BASE_URL}/venues/status?current_datetime=${encodeURIComponent(simulationTime)}`,
-                );
+                const url = simulationTime
+                    ? `${API_BASE_URL}/venues/status?current_datetime=${encodeURIComponent(simulationTime)}`
+                    : `${API_BASE_URL}/venues/status`;
+                const response = await fetch(url);
                 if (response.ok) {
                     const data = await response.json();
                     console.log(data);
@@ -187,28 +189,28 @@ function MapContent() {
 
     const handleStartNavigation = async (routeData: NavRouteData) => {
         setIsLocatingUser(true);
-        
+
         try {
             // Request user location
-            map.locate({ 
-                setView: false, 
+            map.locate({
+                setView: false,
                 maxZoom: map.getMaxZoom(),
                 enableHighAccuracy: true,
-                timeout: 10000
+                timeout: 10000,
             });
 
             // Wait for location
             await new Promise<void>((resolve, reject) => {
                 const onLocationFound = (location: any) => {
-                    map.off('locationfound', onLocationFound);
-                    map.off('locationerror', onLocationError);
-                    
+                    map.off("locationfound", onLocationFound);
+                    map.off("locationerror", onLocationError);
+
                     // Fly to user's location
                     map.flyTo([location.latitude, location.longitude], 18, {
                         duration: 1,
                         easeLinearity: 0.5,
                     });
-                    
+
                     // Start navigation
                     startNavigation(routeData);
                     setIsLocatingUser(false);
@@ -216,15 +218,17 @@ function MapContent() {
                 };
 
                 const onLocationError = (error: any) => {
-                    map.off('locationfound', onLocationFound);
-                    map.off('locationerror', onLocationError);
-                    
-                    console.error('Location error:', error);
+                    map.off("locationfound", onLocationFound);
+                    map.off("locationerror", onLocationError);
+
+                    console.error("Location error:", error);
                     setIsLocatingUser(false);
-                    
+
                     // Still start navigation, but show a warning
-                    alert('Could not get your location. Navigation will start from the route start point.');
-                    
+                    alert(
+                        "Could not get your location. Navigation will start from the route start point.",
+                    );
+
                     // Fly to start location instead
                     if (startLocation) {
                         map.flyTo(startLocation.coordinates, 18, {
@@ -232,17 +236,17 @@ function MapContent() {
                             easeLinearity: 0.5,
                         });
                     }
-                    
+
                     startNavigation(routeData);
                     reject(error);
                 };
 
-                map.once('locationfound', onLocationFound);
-                map.once('locationerror', onLocationError);
+                map.once("locationfound", onLocationFound);
+                map.once("locationerror", onLocationError);
             });
         } catch (error) {
             // Error already handled in the promise
-            console.error('Navigation start error:', error);
+            console.error("Navigation start error:", error);
         }
     };
 
@@ -288,25 +292,25 @@ function MapContent() {
 
         setLoading(true);
         try {
-            const response = await fetch(
-                `${API_BASE_URL}/routes/?current_datetime=${encodeURIComponent(simulationTime)}`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        start: {
-                            longitude: startLocation.coordinates[1],
-                            latitude: startLocation.coordinates[0],
-                        },
-                        end: {
-                            longitude: endLocation.coordinates[1],
-                            latitude: endLocation.coordinates[0],
-                        },
-                    }),
+            const url = simulationTime
+                ? `${API_BASE_URL}/routes/?current_datetime=${encodeURIComponent(simulationTime)}`
+                : `${API_BASE_URL}/routes/`;
+            const response = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
                 },
-            );
+                body: JSON.stringify({
+                    start: {
+                        longitude: startLocation.coordinates[1],
+                        latitude: startLocation.coordinates[0],
+                    },
+                    end: {
+                        longitude: endLocation.coordinates[1],
+                        latitude: endLocation.coordinates[0],
+                    },
+                }),
+            });
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -374,7 +378,14 @@ function MapContent() {
                     size="icon"
                     className="shadow-md"
                     onClick={() => {
-                        setTempTime(simulationTime);
+                        const currentSGTime =
+                            simulationTime ||
+                            new Date()
+                                .toLocaleString("sv-SE", {
+                                    timeZone: "Asia/Singapore",
+                                })
+                                .replace(" ", "T");
+                        setTempTime(currentSGTime);
                         setIsTimeModalOpen(true);
                     }}
                 >
@@ -418,13 +429,16 @@ function MapContent() {
                             <div className="flex justify-end gap-2">
                                 <Button
                                     variant="outline"
-                                    onClick={() => setIsTimeModalOpen(false)}
+                                    onClick={() => {
+                                        setSimulationTime(null);
+                                        setIsTimeModalOpen(false);
+                                    }}
                                 >
-                                    Cancel
+                                    Use Real Time
                                 </Button>
                                 <Button
                                     onClick={() => {
-                                        setSimulationTime(tempTime);
+                                        setSimulationTime(tempTime || null);
                                         setIsTimeModalOpen(false);
                                     }}
                                 >
@@ -827,7 +841,9 @@ c135 -8 498 -1 640 12 l72 6 0 373 0 374 -27 -1 c-16 -1 -77 -6 -138 -11z"
                                                     routeData as NavRouteData,
                                                 );
                                             }}
-                                            disabled={isNavigating || isLocatingUser}
+                                            disabled={
+                                                isNavigating || isLocatingUser
+                                            }
                                         >
                                             <Volume2 className="h-3 w-3 mr-1" />
                                             Start Navigation
