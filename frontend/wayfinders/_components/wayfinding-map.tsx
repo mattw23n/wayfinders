@@ -19,7 +19,6 @@ import {
     ChevronDown,
     ChevronUp,
     Clock,
-    MapPin,
     Navigation,
     Route as RouteIcon,
     Volume2,
@@ -434,7 +433,7 @@ function MapContent() {
                                         setIsTimeModalOpen(false);
                                     }}
                                 >
-                                    Use Real Time
+                                    Use Current Time
                                 </Button>
                                 <Button
                                     onClick={() => {

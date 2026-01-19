@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "University Wayfinding",
+  title: "Wayfinders",
   description: "Find the most secluded routes on campus",
 };
 
